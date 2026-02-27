@@ -274,7 +274,7 @@
             right: 0;
             top: calc(100% + 8px);
             z-index: 50;
-            min-width: 160px;
+            min-width: 220px;
             background: var(--bg-secondary);
             border-radius: 12px;
             box-shadow: 0 10px 30px rgba(2, 6, 23, 0.08);
@@ -299,6 +299,23 @@
             background: rgba(59, 130, 246, 0.12);
             color: #062e73;
             font-weight: 600;
+        }
+
+        .custom-select-group-label {
+            padding: 0.6rem 0.9rem 0.3rem 0.7rem;
+            font-size: 0.65rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 0.2rem;
+            margin-top: 0.3rem;
+        }
+
+        .custom-select-options .opt {
+            padding-left: 1.25rem;
         }
 
         /* Small screens: make full width dropdowns sit properly */
@@ -1591,7 +1608,7 @@
                 <div>
                     <label class="block text-sm text-slate-500 dark:text-slate-400">Qualification <span
                             class="text-slate-400 text-xs font-normal">(optional)</span></label>
-                    <select name="qualification" class="theme-input rounded">
+                    <select name="qualification" class="theme-input rounded searchable-select">
                         <option value="">-- Select Qualification --</option>
                         <optgroup label="─── School Level ───">
                             <option value="10th Pass">10th Pass (SSC / Matriculation)</option>
@@ -2777,8 +2794,8 @@
                         const job = cachedJobs.find(j => j.id === c.jobId);
                         if (!job) return true;
                         const jobBudget = job.budget ? Number(job.budget) : (job.budgetMax ? Number(job.budgetMax) : 0);
-                        const expCTC = Number(c.expectedCTC || c.expectedSalary || 0);
-                        return filterBudget === 'within' ? expCTC <= jobBudget : expCTC > jobBudget;
+                        const annualExpCTC = Number(c.expectedCTC || c.expectedSalary || 0) * 12;
+                        return filterBudget === 'within' ? annualExpCTC <= jobBudget : annualExpCTC > jobBudget;
                     });
                 }
                 return arr;
@@ -4025,8 +4042,8 @@
                 optsBox.className = 'custom-select-options hidden';
                 optsBox.setAttribute('role', 'listbox');
 
-                // populate options
-                Array.from(sel.options).forEach((o, idx) => {
+                // Helper to create an option
+                const createOpt = (o) => {
                     const li = document.createElement('div');
                     li.className = 'opt';
                     li.dataset.value = o.value;
@@ -4042,30 +4059,37 @@
                         li.setAttribute('aria-selected', 'true');
                     }
                     li.addEventListener('click', () => {
-                        // update original select
                         sel.value = o.value;
-                        // update display
                         label.innerText = o.text;
-                        // update active state
                         optsBox.querySelectorAll('.opt').forEach(x => { x.classList.remove('active'); x.removeAttribute('aria-selected'); });
                         li.classList.add('active');
                         li.setAttribute('aria-selected', 'true');
-                        // close
                         optsBox.classList.add('hidden');
                         display.setAttribute('aria-expanded', 'false');
-                        // trigger change
                         sel.dispatchEvent(new Event('change', { bubbles: true }));
-                        // If this is the company select, also run the prefill helper directly as a fallback
-                        if (sel.id === 'job-company-select') try { prefillJobLocationFromCompany(); } catch (e) { /* ignore */ }
+                        if (sel.id === 'job-company-select') try { prefillJobLocationFromCompany(); } catch (e) { }
                         display.focus();
                     });
-
-                    // keyboard support for option
                     li.addEventListener('keydown', (ev) => {
                         if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); li.click(); }
                     });
+                    return li;
+                };
 
-                    optsBox.appendChild(li);
+                // populate options (handle optgroups if present)
+                const children = Array.from(sel.children);
+                children.forEach(child => {
+                    if (child.tagName === 'OPTGROUP') {
+                        const groupLabel = document.createElement('div');
+                        groupLabel.className = 'custom-select-group-label';
+                        groupLabel.innerText = child.label;
+                        optsBox.appendChild(groupLabel);
+                        Array.from(child.children).forEach(o => {
+                            if (o.tagName === 'OPTION') optsBox.appendChild(createOpt(o));
+                        });
+                    } else if (child.tagName === 'OPTION') {
+                        optsBox.appendChild(createOpt(child));
+                    }
                 });
 
                 // If select is searchable, add an input to filter options
@@ -4093,13 +4117,33 @@
                     const filter = () => {
                         const q = (searchInput.value || '').trim().toLowerCase();
                         let any = false;
-                        Array.from(optsBox.querySelectorAll('.opt')).forEach(opt => {
-                            if (opt === noMatch) return;
-                            const txt = (opt.innerText || '').toLowerCase();
-                            const show = !q || txt.includes(q);
-                            opt.style.display = show ? '' : 'none';
-                            if (show) any = true;
+
+                        // Track grouped content
+                        let currentGroupLabel = null;
+                        let groupHasMatch = false;
+
+                        Array.from(optsBox.children).forEach(el => {
+                            if (el.className === 'custom-select-group-label') {
+                                // Previous group handling
+                                if (currentGroupLabel && !groupHasMatch) currentGroupLabel.style.display = 'none';
+
+                                currentGroupLabel = el;
+                                groupHasMatch = false;
+                                el.style.display = ''; // Reset for now
+                            } else if (el.classList.contains('opt')) {
+                                if (el === noMatch) return;
+                                const txt = (el.innerText || '').toLowerCase();
+                                const show = !q || txt.includes(q);
+                                el.style.display = show ? '' : 'none';
+                                if (show) {
+                                    any = true;
+                                    groupHasMatch = true;
+                                }
+                            }
                         });
+                        // Final group check
+                        if (currentGroupLabel && !groupHasMatch && q) currentGroupLabel.style.display = 'none';
+
                         noMatch.style.display = any ? 'none' : '';
                     };
 
