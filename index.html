@@ -2244,6 +2244,31 @@
         </div>
     </div>
 
+    <!-- MODAL: INACTIVITY WARNING -->
+    <div id="modal-inactivity" class="fixed inset-0 bg-black/60 z-[200] hidden flex items-center justify-center p-4">
+        <div class="modal-box w-full max-w-sm rounded-2xl p-8 text-center">
+            <div
+                class="w-16 h-16 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-full flex items-center justify-center text-3xl mx-auto mb-4">
+                <i class="fas fa-clock"></i>
+            </div>
+            <h3 class="text-xl font-bold mb-2">Session Timeout</h3>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">
+                You have been inactive for a while. You will be automatically logged out in <span
+                    id="inactivity-countdown" class="font-bold text-orange-500">60</span> seconds for security.
+            </p>
+            <div class="flex flex-col gap-3">
+                <button onclick="resetIdleTimer()"
+                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-blue-600/20">
+                    Stay Logged In
+                </button>
+                <button onclick="signOut(auth)"
+                    class="text-slate-500 hover:text-red-500 text-sm font-medium transition-colors">
+                    Logout Now
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notifications -->
     <div id="toast"
         class="fixed bottom-5 right-5 z-[200] px-6 py-3 rounded-lg text-white shadow-xl transition-all opacity-0 pointer-events-none">
@@ -2286,6 +2311,13 @@
         let globalSearchQuery = '';
         let candidateView = 'table'; // 'table' or 'cards'
 
+        // --- SESSION TIMEOUT CONFIG ---
+        const INACTIVITY_TIMEOUT = 10 * 1000; // 10 seconds for testing
+        const WARNING_DURATION = 5 * 1000; // 5 seconds for testing
+        let idleTimer = null;
+        let warningTimer = null;
+        let countdownInterval = null;
+
         const searchInput = document.getElementById('global-search');
         const clearBtn = document.getElementById('clear-search');
         const searchCountEl = document.getElementById('search-count');
@@ -2317,6 +2349,56 @@
                 clearTimeout(t);
                 t = setTimeout(() => fn.apply(this, args), wait);
             };
+        }
+
+        // --- SESSION TIMEOUT LOGIC ---
+        function startIdleTimer() {
+            stopIdleTimer();
+            if (!currentUser) return;
+
+            idleTimer = setTimeout(showInactivityWarning, INACTIVITY_TIMEOUT - WARNING_DURATION);
+
+            // Listen for activity to reset the timer
+            ['mousedown', 'mousemove', 'keydown', 'touchstart'].forEach(event => {
+                window.addEventListener(event, resetIdleTimer, { once: true });
+            });
+        }
+
+        function stopIdleTimer() {
+            if (idleTimer) clearTimeout(idleTimer);
+            if (warningTimer) clearTimeout(warningTimer);
+            if (countdownInterval) clearInterval(countdownInterval);
+
+            ['mousedown', 'mousemove', 'keydown', 'touchstart'].forEach(event => {
+                window.removeEventListener(event, resetIdleTimer);
+            });
+        }
+
+        window.resetIdleTimer = function () {
+            closeModal('modal-inactivity');
+            startIdleTimer();
+        };
+
+        function showInactivityWarning() {
+            openModal('modal-inactivity');
+            let secondsLeft = WARNING_DURATION / 1000;
+            const countdownEl = document.getElementById('inactivity-countdown');
+            if (countdownEl) countdownEl.innerText = secondsLeft;
+
+            countdownInterval = setInterval(() => {
+                secondsLeft--;
+                if (countdownEl) countdownEl.innerText = secondsLeft;
+                if (secondsLeft <= 0) {
+                    clearInterval(countdownInterval);
+                }
+            }, 1000);
+
+            warningTimer = setTimeout(handleAutoLogout, WARNING_DURATION);
+        }
+
+        async function handleAutoLogout() {
+            showToast("Logged out due to inactivity.");
+            await signOut(auth);
         }
 
         function computeSearchCount(query) {
@@ -2572,11 +2654,15 @@
                 if (navInitial) navInitial.innerText = (user.displayName ? user.displayName[0] : user.email[0]).toUpperCase();
                 if (menuEmail) menuEmail.innerText = user.email;
 
+                startIdleTimer();
                 initApp();
             } else {
                 currentUser = null;
+                stopIdleTimer();
                 document.getElementById('auth-container').classList.remove('hidden');
                 document.getElementById('main-app').classList.add('hidden');
+                const modal = document.getElementById('modal-inactivity');
+                if (modal) modal.classList.add('hidden');
             }
         });
 
