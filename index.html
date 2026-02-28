@@ -3938,7 +3938,12 @@
 
                 e.target.reset();
                 document.getElementById('form-candidate-id').value = '';
-            } catch (e) { alert("Error: " + e.message); }
+                document.getElementById('resume-upload-status').innerHTML = ''; // Reset status
+                pendingResumeFile = null;
+            } catch (e) {
+                console.error("Form Submission Error:", e);
+                alert("Error: " + e.message);
+            }
             finally { btn.innerText = orig; btn.disabled = false; }
         };
 
@@ -4721,6 +4726,13 @@
                             ev.preventDefault();
                             const first = optsBox.querySelector('.opt:not([style*="display: none"])');
                             if (first) first.focus();
+                        }
+                    });
+
+                    // Auto-focus search input when opened
+                    display.addEventListener('click', () => {
+                        if (!optsBox.classList.contains('hidden')) {
+                            setTimeout(() => searchInput.focus(), 50);
                         }
                     });
                 }
