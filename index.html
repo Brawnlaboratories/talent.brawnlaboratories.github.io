@@ -765,6 +765,19 @@
             color: #d8b4fe;
             border-color: rgba(168, 85, 247, .3);
         }
+
+        /* Visual utility for accessibility */
+        .visually-hidden {
+            position: absolute !important;
+            width: 1px !important;
+            height: 1px !important;
+            padding: 0 !important;
+            margin: -1px !important;
+            overflow: hidden !important;
+            clip: rect(0, 0, 0, 0) !important;
+            white-space: nowrap !important;
+            border: 0 !important;
+        }
     </style>
     <script>
             // Theme Initialization
@@ -4480,8 +4493,8 @@
                     next.remove();
                 }
 
-                // hide native select but keep it in the DOM for form submission
-                sel.style.display = 'none';
+                // hide native select visually but keep it focusable for validation
+                sel.classList.add('visually-hidden');
                 sel.dataset.customized = '1';
 
                 const wrapper = document.createElement('div');
@@ -4498,6 +4511,9 @@
                 display.setAttribute('role', 'button');
                 display.setAttribute('aria-haspopup', 'listbox');
                 display.setAttribute('aria-expanded', 'false');
+
+                // Redirect focus from native select to custom display
+                sel.addEventListener('focus', () => display.focus());
                 const label = document.createElement('div'); label.className = 'label';
                 const chev = document.createElement('div'); chev.innerHTML = '<svg width="14" height="14" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 8l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
                 display.appendChild(label);
