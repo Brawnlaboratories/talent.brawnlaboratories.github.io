@@ -794,6 +794,61 @@
 
 <body class="antialiased">
 
+    <!-- MODALS SECTION -->
+    <div id="modal-container">
+
+        <!-- Task Modal -->
+        <div id="modal-task"
+            class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div class="glass-card rounded-3xl w-full max-w-lg shadow-2xl scale-in-center overflow-hidden">
+                <div
+                    class="bg-gradient-to-r from-orange-500 to-amber-500 p-6 flex justify-between items-center text-white">
+                    <h3 id="modal-task-title" class="text-xl font-bold flex items-center gap-2">
+                        <i class="fas fa-list-check"></i>
+                        Add New Task
+                    </h3>
+                    <button onclick="closeModal('modal-task')"
+                        class="hover:rotate-90 transition-transform dropdown-close">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <form id="form-task" class="p-8 space-y-6">
+                    <input type="hidden" id="form-task-id">
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Task
+                            Title</label>
+                        <input type="text" name="title" required placeholder="e.g. Follow up with Interviewers"
+                            class="theme-input bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 focus:ring-4 focus:ring-orange-500/10 transition-all font-medium">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label
+                                class="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Priority</label>
+                            <select name="priority" class="theme-input cursor-pointer">
+                                <option value="Low">Low</option>
+                                <option value="Medium" selected>Medium</option>
+                                <option value="High">High</option>
+                                <option value="Urgent">Urgent</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Due
+                                Date</label>
+                            <input type="date" name="dueDate" class="theme-input cursor-pointer">
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-3 pt-4">
+                        <button type="button" onclick="closeModal('modal-task')"
+                            class="px-6 py-2.5 rounded-xl font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">Cancel</button>
+                        <button type="submit"
+                            class="bg-orange-600 hover:bg-orange-700 text-white px-8 py-2.5 rounded-xl font-bold shadow-lg shadow-orange-600/20 active:scale-95 transition-all">Save
+                            Task</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- Auth Section -->
     <div id="auth-container" class="fixed inset-0 z-[100] flex overflow-hidden">
         <!-- Left Side: Branding/Image -->
@@ -951,6 +1006,13 @@
                     <i class="fas fa-chart-line w-5 flex-shrink-0"></i> <span
                         class="sidebar-label whitespace-nowrap">Dashboard</span>
                 </a>
+                <a href="#" onclick="showSection('tasks')"
+                    class="sidebar-btn flex items-center gap-3 p-3 rounded-lg transition-colors text-orange-400"
+                    id="btn-nav-tasks" style="color: var(--text-secondary)">
+                    <i class="fas fa-list-check w-5 flex-shrink-0"></i> <span
+                        class="sidebar-label whitespace-nowrap">Task Board</span>
+                </a>
+                <div class="h-px bg-slate-200 dark:bg-slate-800 mx-3 my-2 opacity-50"></div>
                 <a href="#" onclick="showSection('companies')"
                     class="sidebar-btn flex items-center gap-3 p-3 rounded-lg transition-colors" id="btn-nav-companies"
                     style="color: var(--text-secondary)">
@@ -969,12 +1031,32 @@
                     <i class="fas fa-user-tie w-5 flex-shrink-0"></i> <span
                         class="sidebar-label whitespace-nowrap">Candidates</span>
                 </a>
+                <a href="#" onclick="showSection('talentpool')"
+                    class="sidebar-btn flex items-center gap-3 p-3 rounded-lg transition-colors text-purple-400"
+                    id="btn-nav-talentpool" style="color: var(--text-secondary)">
+                    <i class="fas fa-dna w-5 flex-shrink-0"></i> <span class="sidebar-label whitespace-nowrap">Talent
+                        Pool</span>
+                </a>
+                <div class="h-px bg-slate-200 dark:bg-slate-800 mx-3 my-2 opacity-50"></div>
                 <a href="#" onclick="showSection('interviews')"
                     class="sidebar-btn flex items-center gap-3 p-3 rounded-lg transition-colors" id="btn-nav-interviews"
                     style="color: var(--text-secondary)">
                     <i class="fas fa-calendar-alt w-5 flex-shrink-0"></i> <span
                         class="sidebar-label whitespace-nowrap">Interviews</span>
                 </a>
+                <a href="#" onclick="showSection('offers')"
+                    class="sidebar-btn flex items-center gap-3 p-3 rounded-lg transition-colors text-emerald-500"
+                    id="btn-nav-offers" style="color: var(--text-secondary)">
+                    <i class="fas fa-signature w-5 flex-shrink-0"></i> <span
+                        class="sidebar-label whitespace-nowrap">Offer Letters</span>
+                </a>
+                <a href="#" onclick="showSection('organogram')"
+                    class="sidebar-btn flex items-center gap-3 p-3 rounded-lg transition-colors text-blue-500"
+                    id="btn-nav-organogram" style="color: var(--text-secondary)">
+                    <i class="fas fa-sitemap w-5 flex-shrink-0"></i> <span
+                        class="sidebar-label whitespace-nowrap">Organogram</span>
+                </a>
+                <div class="h-px bg-slate-200 dark:bg-slate-800 mx-3 my-2 opacity-50"></div>
                 <a href="#" onclick="showSection('messaging')"
                     class="sidebar-btn flex items-center gap-3 p-3 rounded-lg transition-colors" id="btn-nav-messaging"
                     style="color: var(--text-secondary)">
@@ -986,6 +1068,12 @@
                     style="color: var(--text-secondary)">
                     <i class="fas fa-file-excel w-5 text-green-500 flex-shrink-0"></i> <span
                         class="sidebar-label whitespace-nowrap">Reports</span>
+                </a>
+                <a href="#" onclick="showSection('portalsettings')"
+                    class="sidebar-btn flex items-center gap-3 p-3 rounded-lg transition-colors text-slate-400 hover:text-slate-600"
+                    id="btn-nav-portalsettings" style="color: var(--text-secondary)">
+                    <i class="fas fa-sliders w-5 flex-shrink-0"></i> <span
+                        class="sidebar-label whitespace-nowrap">Portal Settings</span>
                 </a>
             </nav>
         </aside>
@@ -1070,30 +1158,29 @@
                     <div
                         class="flex flex-wrap gap-4 items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
                         <h3 class="text-xl font-bold">Quick Overview</h3>
-                        <div class="flex gap-2">
-                            <button onclick="openModal('modal-candidate')"
-                                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2">
-                                <i class="fas fa-plus"></i> Add Candidate
-                            </button>
-                            <button onclick="openModal('modal-job')"
-                                class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2">
-                                <i class="fas fa-briefcase"></i> Post Job
-                            </button>
-                            <button onclick="showSection('messaging')"
-                                class="bg-whatsapp hover:bg-opacity-90 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2">
-                                <i class="fab fa-whatsapp"></i> Bulk Message
-                            </button>
-                        </div>
+                        <button onclick="openAddTaskModal()"
+                            class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2">
+                            <i class="fas fa-tasks"></i> New Task
+                        </button>
+                        <button onclick="showSection('portalsettings')"
+                            class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2">
+                            <i class="fas fa-cog"></i> Portal Settings
+                        </button>
+                        <button onclick="openModal('modal-candidate')"
+                            class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2">
+                            <i class="fas fa-plus"></i> Add Candidate
+                        </button>
                     </div>
 
                     <!-- Primary Stats -->
+                    <!-- Primary Stats Grid -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                         <div
                             class="glass-card p-6 rounded-2xl border-l-4 border-l-blue-500 hover:scale-[1.02] transition-transform">
                             <div class="flex justify-between items-start">
                                 <div>
-                                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Total
-                                        Candidates</p>
+                                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total
+                                        Pipeline</p>
                                     <h3 class="text-3xl font-bold mt-2" id="stat-total-candidates">0</h3>
                                 </div>
                                 <div
@@ -1106,7 +1193,7 @@
                             class="glass-card p-6 rounded-2xl border-l-4 border-l-purple-500 hover:scale-[1.02] transition-transform">
                             <div class="flex justify-between items-start">
                                 <div>
-                                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Active Jobs
+                                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Active Jobs
                                     </p>
                                     <h3 class="text-3xl font-bold mt-2" id="stat-active-jobs">0</h3>
                                 </div>
@@ -1120,7 +1207,7 @@
                             class="glass-card p-6 rounded-2xl border-l-4 border-l-orange-500 hover:scale-[1.02] transition-transform">
                             <div class="flex justify-between items-start">
                                 <div>
-                                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Today's
+                                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Today's
                                         Interviews</p>
                                     <h3 class="text-3xl font-bold mt-2" id="stat-today-interviews">0</h3>
                                 </div>
@@ -1134,14 +1221,62 @@
                             class="glass-card p-6 rounded-2xl border-l-4 border-l-green-500 hover:scale-[1.02] transition-transform">
                             <div class="flex justify-between items-start">
                                 <div>
-                                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Selection
-                                        Rate</p>
-                                    <h3 class="text-3xl font-bold mt-2" id="stat-selection-rate">0%</h3>
+                                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Pending
+                                        Tasks</p>
+                                    <h3 class="text-3xl font-bold mt-2" id="stat-pending-tasks">0</h3>
                                 </div>
                                 <div
                                     class="p-3 bg-green-100 dark:bg-green-900/30 rounded-xl text-green-600 dark:text-green-400">
-                                    <i class="fas fa-chart-pie"></i>
+                                    <i class="fas fa-list-check"></i>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Roadmap v2 Stats Row -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div
+                            class="glass-card p-6 rounded-2xl border-b-4 border-b-indigo-500 hover:scale-[1.02] transition-transform">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Talent Pool
+                                    </p>
+                                    <h3 class="text-3xl font-bold mt-2" id="stat-talent-pool">0</h3>
+                                </div>
+                                <div class="text-indigo-500"><i class="fas fa-dna text-xl"></i></div>
+                            </div>
+                        </div>
+                        <div
+                            class="glass-card p-6 rounded-2xl border-b-4 border-b-emerald-500 hover:scale-[1.02] transition-transform">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Active
+                                        Headcount</p>
+                                    <h3 class="text-3xl font-bold mt-2" id="stat-headcount">0</h3>
+                                </div>
+                                <div class="text-emerald-500"><i class="fas fa-sitemap text-xl"></i></div>
+                            </div>
+                        </div>
+                        <div
+                            class="glass-card p-6 rounded-2xl border-b-4 border-b-blue-600 hover:scale-[1.02] transition-transform">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Open Offers
+                                    </p>
+                                    <h3 class="text-3xl font-bold mt-2" id="stat-open-offers">0</h3>
+                                </div>
+                                <div class="text-blue-600"><i class="fas fa-signature text-xl"></i></div>
+                            </div>
+                        </div>
+                        <div
+                            class="glass-card p-6 rounded-2xl border-b-4 border-b-rose-500 hover:scale-[1.02] transition-transform">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Selection
+                                        Rate</p>
+                                    <h3 class="text-3xl font-bold mt-2" id="stat-selection-rate">0%</h3>
+                                </div>
+                                <div class="text-rose-500"><i class="fas fa-chart-pie text-xl"></i></div>
                             </div>
                         </div>
                     </div>
@@ -1206,6 +1341,26 @@
                                     <canvas id="budgetChart"></canvas>
                                 </div>
                             </div>
+
+                            <!-- Dashboard Tasks Widget -->
+                            <div class="glass-card p-6 rounded-2xl">
+                                <h4 class="text-lg font-bold mb-6 flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-list-check text-blue-500"></i>
+                                        Recent HR Tasks
+                                    </div>
+                                    <button onclick="openAddTaskModal()" class="text-blue-600 hover:text-blue-700 p-1">
+                                        <i class="fas fa-plus-circle text-lg"></i>
+                                    </button>
+                                </h4>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="dashboard-tasks-list">
+                                    <!-- Tasks injected here -->
+                                </div>
+                                <button onclick="showSection('tasks')"
+                                    class="w-full mt-6 py-2 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                                    Go to Task Board
+                                </button>
+                            </div>
                         </div>
 
                         <!-- Sidebar Column: Upcoming Interviews -->
@@ -1223,12 +1378,11 @@
                                             <i class="fas fa-plus-circle text-lg"></i>
                                         </button>
                                         <span
-                                            class="text-[10px] bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 px-2 py-0.5 rounded-full"
+                                            class="text-[10px] px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-bold"
                                             id="upcoming-count">0 Scheduled</span>
                                     </div>
                                 </h4>
-                                <div class="space-y-4 flex-1 overflow-y-auto pr-2" id="dashboard-interviews-list"
-                                    style="max-height: 700px;">
+                                <div class="space-y-4 flex-1" id="dashboard-interviews-list">
                                     <!-- Upcoming interviews injected here -->
                                     <div class="text-center py-12 text-slate-400">
                                         <p class="text-sm">No interviews scheduled soon.</p>
@@ -1422,6 +1576,171 @@
                                 <!-- Data injected here -->
                             </tbody>
                         </table>
+                    </div>
+                </div>
+
+                <!-- TASK BOARD VIEW -->
+                <div id="section-tasks" class="hidden space-y-6">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h3 class="text-2xl font-bold">HR Task Board</h3>
+                            <p class="text-xs text-slate-500 text-orange-600 dark:text-orange-400 font-medium">
+                                Coordinate your team's internal recruitment tasks</p>
+                        </div>
+                        <button onclick="openAddTaskModal()"
+                            class="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2.5 rounded-xl gap-2 flex items-center shadow-lg shadow-orange-500/20 transition-all active:scale-95">
+                            <i class="fas fa-plus"></i> New Task
+                        </button>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 h-[calc(100vh-250px)] overflow-hidden">
+                        <!-- To Do -->
+                        <div class="flex flex-col h-full">
+                            <div class="flex items-center justify-between mb-4 px-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="w-2 h-2 rounded-full bg-slate-400"></span>
+                                    <h4
+                                        class="font-bold text-slate-600 dark:text-slate-400 uppercase text-[10px] tracking-widest">
+                                        To Do</h4>
+                                </div>
+                                <span id="count-todo"
+                                    class="bg-slate-100 dark:bg-slate-800 text-slate-500 text-[10px] px-2 py-0.5 rounded-full font-bold">0</span>
+                            </div>
+                            <div id="kanban-todo"
+                                class="flex-1 overflow-y-auto space-y-4 p-2 bg-slate-100/30 dark:bg-slate-900/40 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                                <!-- Cards -->
+                            </div>
+                        </div>
+
+                        <!-- In Progress -->
+                        <div class="flex flex-col h-full">
+                            <div class="flex items-center justify-between mb-4 px-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                                    <h4
+                                        class="font-bold text-blue-600 dark:text-blue-400 uppercase text-[10px] tracking-widest">
+                                        In Progress</h4>
+                                </div>
+                                <span id="count-inprogress"
+                                    class="bg-blue-50 dark:bg-blue-900/30 text-blue-600 text-[10px] px-2 py-0.5 rounded-full font-bold">0</span>
+                            </div>
+                            <div id="kanban-inprogress"
+                                class="flex-1 overflow-y-auto space-y-4 p-2 bg-blue-50/10 dark:bg-blue-900/10 rounded-2xl border border-dashed border-blue-100 dark:border-blue-900/30">
+                                <!-- Cards -->
+                            </div>
+                        </div>
+
+                        <!-- Done -->
+                        <div class="flex flex-col h-full">
+                            <div class="flex items-center justify-between mb-4 px-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                    <h4
+                                        class="font-bold text-emerald-600 dark:text-emerald-400 uppercase text-[10px] tracking-widest">
+                                        Completed</h4>
+                                </div>
+                                <span id="count-done"
+                                    class="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 text-[10px] px-2 py-0.5 rounded-full font-bold">0</span>
+                            </div>
+                            <div id="kanban-done"
+                                class="flex-1 overflow-y-auto space-y-4 p-2 bg-emerald-50/10 dark:bg-emerald-900/10 rounded-2xl border border-dashed border-emerald-100 dark:border-emerald-900/30">
+                                <!-- Cards -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TALENT POOL VIEW -->
+                <div id="section-talentpool" class="hidden space-y-6">
+                    <div class="flex justify-between items-center">
+                        <div class="flex flex-col">
+                            <h3 class="text-2xl font-bold">Talent Pool</h3>
+                            <p class="text-xs text-slate-500">Historical database of all applicants with smart tagging
+                            </p>
+                        </div>
+                        <div class="flex gap-4 items-center">
+                            <div class="relative">
+                                <i
+                                    class="fas fa-tag absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                                <input type="text" id="talent-pool-tag-filter" placeholder="Filter by tag..."
+                                    class="theme-input pl-8 py-1.5 text-xs w-48" onkeyup="renderTalentPool()">
+                            </div>
+                            <button onclick="renderTalentPool()"
+                                class="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 transition">
+                                <i class="fas fa-sync-alt text-slate-600 dark:text-slate-300"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div
+                        class="glass-card rounded-2xl overflow-hidden border border-slate-200/50 dark:border-slate-800/50 shadow-xl">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left">
+                                <thead
+                                    class="bg-slate-50/50 dark:bg-slate-900/40 border-b border-slate-200 dark:border-slate-800">
+                                    <tr>
+                                        <th
+                                            class="px-6 py-4 text-[10px] uppercase font-bold tracking-widest text-slate-500">
+                                            Candidate Info</th>
+                                        <th
+                                            class="px-6 py-4 text-[10px] uppercase font-bold tracking-widest text-slate-500">
+                                            Last Applied For</th>
+                                        <th
+                                            class="px-6 py-4 text-[10px] uppercase font-bold tracking-widest text-slate-500">
+                                            Exp / CTC</th>
+                                        <th
+                                            class="px-6 py-4 text-[10px] uppercase font-bold tracking-widest text-slate-500">
+                                            Smart Tags</th>
+                                        <th
+                                            class="px-6 py-4 text-right text-[10px] uppercase font-bold tracking-widest text-slate-500">
+                                            Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="talent-pool-table-body"
+                                    class="divide-y divide-slate-100 dark:divide-slate-800/50">
+                                    <!-- Talent data injected by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- OFFERS VIEW -->
+                <div id="section-offers" class="hidden space-y-6">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-2xl font-bold">Offer Management</h3>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="offers-list">
+                        <!-- Pending offers here -->
+                    </div>
+                </div>
+
+                <!-- ORGANOGRAM VIEW -->
+                <div id="section-organogram" class="hidden space-y-6">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h3 class="text-2xl font-bold">Corporate Organogram</h3>
+                            <p class="text-xs text-slate-500 font-medium">Visual hierarchical structure of the
+                                organization</p>
+                        </div>
+                    </div>
+                    <div id="organogram-container"
+                        class="glass-card p-6 rounded-2xl overflow-x-auto min-h-[500px] flex justify-center">
+                        <!-- Hierarchy injected here -->
+                    </div>
+                </div>
+
+                <!-- PORTAL SETTINGS VIEW -->
+                <div id="section-portalsettings" class="hidden space-y-6">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h3 class="text-2xl font-bold">Public Portal Settings</h3>
+                            <p class="text-xs text-slate-500 font-medium">Configure how candidates see your career page
+                            </p>
+                        </div>
+                    </div>
+                    <div id="portal-settings-container">
+                        <!-- JS injects form here -->
                     </div>
                 </div>
 
@@ -1772,11 +2091,7 @@
                         <option value="Yes">Yes</option>
                     </select>
                 </div>
-                <div class="col-span-full">
-                    <label class="block text-sm mb-1 text-slate-500 dark:text-slate-400">Required Skills (Comma
-                        separated)</label>
-                    <input type="text" name="skills" placeholder="e.g. React, Node.js, SQL" class="theme-input rounded">
-                </div>
+
                 <div class="col-span-full">
                     <label class="block text-sm mb-1 text-slate-500 dark:text-slate-400">Job Description</label>
                     <textarea name="description" rows="3" class="theme-input rounded resize-y"></textarea>
@@ -2423,7 +2738,7 @@
             getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, sendPasswordResetEmail
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import {
-            getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs, getDoc, query, where, orderBy, onSnapshot, serverTimestamp
+            getFirestore, collection, addDoc, setDoc, updateDoc, deleteDoc, doc, getDocs, getDoc, query, where, orderBy, onSnapshot, serverTimestamp
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         // --- FIREBASE CONFIG ---
@@ -2447,8 +2762,9 @@
         let cachedCompanies = [];
         let cachedJobs = [];
         let cachedCandidates = [];
-        let cachedWaTemplates = [];
         let cachedInterviews = [];
+        let cachedWaTemplates = [];
+        let cachedTasks = [];
         let whatsappSelectedCandidates = new Set();
         let globalSearchQuery = '';
         let candidateView = 'table'; // 'table' or 'cards'
@@ -2829,9 +3145,9 @@
             onSnapshot(compQuery, (snapshot) => {
                 cachedCompanies = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 renderCompanies();
-                renderJobs(); // Update company names in job cards
-                renderCandidates(); // Update company names if they were to be displayed in candidate view
-                updateDropdowns(); // Re-populate form dropdowns
+                renderJobs();
+                renderCandidates();
+                updateDropdowns();
             });
 
             // Listen for Jobs
@@ -2839,8 +3155,8 @@
             onSnapshot(jobsQuery, (snapshot) => {
                 cachedJobs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 renderJobs();
-                renderCandidates(); // Re-render candidates to update budget status badges
-                renderInterviews(); // Re-render interviews if job-related details are shown
+                renderCandidates();
+                renderInterviews();
                 updateDropdowns();
                 updateDashboard();
             });
@@ -2851,7 +3167,7 @@
                 cachedCandidates = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 renderCandidates();
                 updateDashboard();
-                updateDropdowns(); // CRITICAL: Populate candidate search datalist
+                updateDropdowns();
             });
 
             // Listen for Interviews
@@ -2868,6 +3184,16 @@
                 cachedWaTemplates = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 renderWaTemplates();
                 updateWaDropdowns();
+            });
+
+            // Listen for Tasks
+            const taskQuery = query(collection(db, "tasks"), orderBy("createdAt", "desc"));
+            onSnapshot(taskQuery, (snapshot) => {
+                cachedTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                if (document.getElementById('section-tasks') && !document.getElementById('section-tasks').classList.contains('hidden')) {
+                    renderTasks();
+                }
+                updateDashboard();
             });
         }
 
@@ -3576,6 +3902,26 @@
             const todayInts = cachedInterviews.filter(i => i.dateTime && i.dateTime.startsWith(todayStr)).length;
             document.getElementById('stat-today-interviews').innerText = todayInts;
 
+            // Pending Tasks (Roadmap v2)
+            const pendingTasks = cachedTasks.filter(t => (t.status || 'todo').toLowerCase() !== 'done').length;
+            const ptEl = document.getElementById('stat-pending-tasks');
+            if (ptEl) ptEl.innerText = pendingTasks;
+
+            // Talent Pool (Candidates not hired/rejected)
+            const talentPool = cachedCandidates.filter(c => c.stage !== 'Hired' && c.stage !== 'Rejected').length;
+            const tpEl = document.getElementById('stat-talent-pool');
+            if (tpEl) tpEl.innerText = talentPool;
+
+            // Headcount (Hired candidates)
+            const headcount = cachedCandidates.filter(c => c.stage === 'Hired').length;
+            const hcEl = document.getElementById('stat-headcount');
+            if (hcEl) hcEl.innerText = headcount;
+
+            // Open Offers (Selected stage + pending/sent status)
+            const openOffers = cachedCandidates.filter(c => c.stage === 'Selected' && (!c.offerStatus || c.offerStatus !== 'Signed')).length;
+            const ooEl = document.getElementById('stat-open-offers');
+            if (ooEl) ooEl.innerText = openOffers;
+
             // Selection Rate
             const selectedCount = cachedCandidates.filter(c => c.stage === 'Selected' || c.stage === 'Hired').length;
             const selectionRate = totalCandidates > 0 ? Math.round((selectedCount / totalCandidates) * 100) : 0;
@@ -3757,6 +4103,7 @@
             });
 
             renderUpcomingInterviews();
+            renderDashboardTasks();
         }
 
         function renderUpcomingInterviews() {
@@ -3807,6 +4154,40 @@
             }).join('');
         }
 
+        function renderDashboardTasks() {
+            const container = document.getElementById('dashboard-tasks-list');
+            if (!container) return;
+
+            const pending = cachedTasks
+                .filter(t => (t.status || 'todo').toLowerCase() !== 'done')
+                .sort((a, b) => {
+                    const priorities = { 'Urgent': 0, 'High': 1, 'Medium': 2, 'Low': 3 };
+                    return priorities[a.priority] - priorities[b.priority];
+                });
+
+            if (pending.length === 0) {
+                container.innerHTML = `<div class="text-center py-8 text-slate-400 text-xs italic">All caught up! No pending tasks.</div>`;
+                return;
+            }
+
+            container.innerHTML = pending.slice(0, 5).map(t => {
+                const priorityClass = { 'Low': 'text-slate-400', 'Medium': 'text-blue-500', 'High': 'text-orange-500', 'Urgent': 'text-red-500' }[t.priority] || 'text-slate-400';
+                return `
+                <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/20 border border-slate-100 dark:border-slate-800 hover:border-blue-500/20 transition-all group">
+                    <div class="flex items-start gap-3">
+                        <div class="mt-1"><i class="fas fa-circle ${priorityClass} text-[6px]"></i></div>
+                        <div class="flex-1">
+                            <p class="text-xs font-bold text-slate-700 dark:text-slate-200">${t.title}</p>
+                            <div class="flex justify-between items-center mt-1">
+                                <span class="text-[9px] text-slate-400">Due: ${t.dueDate || 'N/A'}</span>
+                                <button onclick="moveTask('${t.id}', 'done')" class="text-[9px] font-bold text-blue-500 hover:underline opacity-0 group-hover:opacity-100 transition-opacity uppercase">Complete</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
         // --- FORMS & ACTIONS ---
         document.getElementById('form-company').onsubmit = async (e) => {
             e.preventDefault();
@@ -3823,7 +4204,6 @@
                     await updateDoc(doc(db, "companies", editId), data);
                     showToast("Company Updated!");
                 } else {
-                    data.createdBy = currentUser.uid;
                     data.createdAt = serverTimestamp();
                     await addDoc(collection(db, "companies"), data);
                     showToast("Company Added!");
@@ -3865,7 +4245,7 @@
                 delete data.id; // clear so it doesn't get saved as a field
 
                 if (editId) {
-                    // Manual Status Logic: If closingDate is in the past, set status to Closed
+                    // Manual Status Logic: ...
                     if (data.closingDate) {
                         const closeDate = new Date(data.closingDate);
                         closeDate.setHours(23, 59, 59, 999);
@@ -3875,15 +4255,12 @@
                             data.status = 'Open';
                         }
                     } else {
-                        // If date is cleared, default to Open unless it's already closed and no date was set
-                        // But typically if user is editing, they want it Open if no date is specified.
                         data.status = 'Open';
                     }
 
                     await updateDoc(doc(db, "jobs", editId), data);
                     showToast("Job Updated Successfully!");
                 } else {
-                    data.createdBy = currentUser.uid;
                     data.createdAt = serverTimestamp();
 
                     // Initial Status Logic for New Jobs
@@ -4117,7 +4494,6 @@
                     await updateDoc(doc(db, "candidates", editId), data);
                     showToast("Candidate Updated!");
                 } else {
-                    data.createdBy = currentUser.uid;
                     data.createdAt = serverTimestamp();
                     data.stage = 'Applied';
                     await addDoc(collection(db, "candidates"), data);
@@ -4211,7 +4587,6 @@
                     await updateDoc(doc(db, "interviews", editId), data);
                     showToast("Interview Updated!");
                 } else {
-                    data.createdBy = currentUser.uid;
                     // Save the stage before this interview was scheduled
                     data.previousStage = currentStage;
                     await addDoc(collection(db, "interviews"), data);
@@ -4356,7 +4731,6 @@
                     await updateDoc(doc(db, "whatsappTemplates", editId), data);
                     showToast("Template Updated!");
                 } else {
-                    data.createdBy = currentUser.uid;
                     data.createdAt = serverTimestamp();
                     await addDoc(collection(db, "whatsappTemplates"), data);
                     showToast("Template Saved!");
@@ -4953,7 +5327,7 @@
                     "Status": j.status || "Open",
                     "Closing Date": j.closingDate || "N/A",
                     "MRF Received": j.mrfReceived || "No",
-                    "Required Skills": j.skills || "N/A",
+
                     "Job Description": j.description || "N/A",
                     // ── Pipeline Counts ──
                     "Total Candidates": jobCandidates.length,
@@ -5518,13 +5892,31 @@
             const navBtn = document.getElementById(`btn-nav-${sectionId}`);
             if (navBtn) navBtn.classList.add('sidebar-item-active');
 
+            const titles = {
+                'dashboard': 'Dashboard',
+                'tasks': 'HR Task Board',
+                'companies': 'Companies',
+                'jobs': 'Job Openings',
+                'candidates': 'Candidates',
+                'talentpool': 'Talent Pool',
+                'interviews': 'Interviews',
+                'offers': 'Offer Management',
+                'organogram': 'Corporate Organogram',
+                'messaging': 'Communications',
+                'reports': 'Reports & Data Export',
+                'portalsettings': 'Portal Customization'
+            };
+
             const titleEl = document.getElementById('section-title');
-            if (titleEl) titleEl.innerText = sectionId.charAt(0).toUpperCase() + sectionId.slice(1);
+            if (titleEl) titleEl.innerText = titles[sectionId] || (sectionId.charAt(0).toUpperCase() + sectionId.slice(1));
 
             // Ensure the visible section is rendered/refreshed so filters take effect
             switch (sectionId) {
                 case 'dashboard':
                     updateDashboard();
+                    break;
+                case 'tasks':
+                    renderTasks();
                     break;
                 case 'companies':
                     renderCompanies();
@@ -5536,8 +5928,17 @@
                     renderCandidates();
                     renderWaCandidatesChecklist();
                     break;
+                case 'talentpool':
+                    renderTalentPool();
+                    break;
                 case 'interviews':
                     renderInterviews();
+                    break;
+                case 'offers':
+                    renderOffers();
+                    break;
+                case 'organogram':
+                    renderOrganogram();
                     break;
                 case 'messaging':
                     renderWaCandidatesChecklist();
@@ -5546,10 +5947,14 @@
                 case 'reports':
                     updateDashboard();
                     break;
+                case 'portalsettings':
+                    loadPortalSettings();
+                    break;
                 default:
                     break;
             }
         };
+
 
         window.openModal = (id) => document.getElementById(id).classList.remove('hidden');
         window.closeModal = (id) => document.getElementById(id).classList.add('hidden');
@@ -5644,6 +6049,226 @@
             if (hiddenId) hiddenId.value = '';
             openModal('modal-interview');
         };
+
+        // --- TASK BOARD LOGIC ---
+        window.renderTasks = () => {
+            const columns = { 'todo': document.getElementById('kanban-todo'), 'inprogress': document.getElementById('kanban-inprogress'), 'done': document.getElementById('kanban-done') };
+            const counts = { 'todo': document.getElementById('count-todo'), 'inprogress': document.getElementById('count-inprogress'), 'done': document.getElementById('count-done') };
+            Object.values(columns).forEach(col => { if (col) col.innerHTML = ''; });
+            const listCounts = { 'todo': 0, 'inprogress': 0, 'done': 0 };
+
+            cachedTasks.forEach(task => {
+                const status = (task.status || 'todo').toLowerCase().replace(' ', '');
+                if (columns[status]) {
+                    listCounts[status]++;
+                    const priorityClass = { 'Low': 'bg-slate-100', 'Medium': 'bg-blue-50', 'High': 'bg-orange-50', 'Urgent': 'bg-red-50' }[task.priority] || 'bg-slate-100';
+                    const next = { 'todo': { label: 'Start', n: 'inprogress' }, 'inprogress': { label: 'Done', n: 'done' }, 'done': { label: 'Reopen', n: 'todo' } }[status];
+                    columns[status].innerHTML += `
+                        <div class="glass-card p-4 rounded-xl border border-slate-200 mb-3 animate-in fade-in">
+                            <span class="text-[8px] font-bold uppercase px-2 py-0.5 rounded-full ${priorityClass}">${task.priority}</span>
+                            <h5 class="text-sm font-bold mt-2">${task.title}</h5>
+                            <div class="flex justify-between items-center mt-4 pt-2 border-t border-slate-100">
+                                <span class="text-[9px] text-slate-500">${task.dueDate || 'No date'}</span>
+                                <button onclick="moveTask('${task.id}', '${next.n}')" class="text-[9px] font-bold uppercase text-blue-500 hover:underline">${next.label}</button>
+                            </div>
+                        </div>`;
+                }
+            });
+            Object.keys(counts).forEach(k => { if (counts[k]) counts[k].innerText = listCounts[k]; });
+        };
+
+        window.openAddTaskModal = () => {
+            const form = document.getElementById('form-task');
+            if (form) form.reset();
+            document.getElementById('form-task-id').value = '';
+            openModal('modal-task');
+        };
+
+        window.moveTask = async (id, status) => {
+            try { await updateDoc(doc(db, "tasks", id), { status }); showToast("Moved"); } catch (e) { showError("Failed"); }
+        };
+
+        window.renderOffers = () => {
+            const list = document.getElementById('offers-list');
+            if (!list) return;
+            const offerCandidates = cachedCandidates.filter(c => c.stage === 'Selected' || c.offerStatus);
+            if (offerCandidates.length === 0) {
+                list.innerHTML = `<div class="col-span-full py-10 text-center text-slate-400 font-medium">No pending offers.</div>`;
+                return;
+            }
+            list.innerHTML = offerCandidates.map(c => `
+                <div class="glass-card p-6 rounded-2xl border border-slate-200">
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="w-10 h-10 rounded bg-blue-50 flex items-center justify-center font-bold text-blue-600">${c.name[0]}</div>
+                        <span class="text-[8px] font-bold uppercase px-2 py-1 bg-slate-100 rounded">${c.offerStatus || 'Pending'}</span>
+                    </div>
+                    <h4 class="font-bold sm:text-base text-sm">${highlight(c.name, getEffectiveQuery('offers'))}</h4>
+                    <div class="mt-6 pt-4 border-t border-slate-100 flex gap-2">
+                        <button onclick="updateOfferStatus('${c.id}', 'Sent')" class="flex-1 py-1.5 text-[9px] font-bold uppercase bg-blue-500 text-white rounded">Sent</button>
+                        <button onclick="updateOfferStatus('${c.id}', 'Signed')" class="flex-1 py-1.5 text-[9px] font-bold uppercase bg-emerald-500 text-white rounded">Signed</button>
+                    </div>
+                </div>`).join('');
+        };
+
+        window.updateOfferStatus = async (id, status) => {
+            try { await updateDoc(doc(db, "candidates", id), { offerStatus: status }); showToast(status); renderOffers(); } catch (e) { showError("Failed"); }
+        };
+
+        window.loadPortalSettings = async () => {
+            const container = document.getElementById('portal-settings-container');
+            if (!container) return;
+            try {
+                const docSnap = await getDoc(doc(db, "settings", "publicPortal"));
+                const data = docSnap.exists() ? docSnap.data() : { companyPrompt: 'Join our team!', primaryColor: '#3b82f6' };
+                container.innerHTML = `
+                <form id="form-portal-settings" class="max-w-md space-y-4">
+                    <div class="glass-card p-6 rounded-2xl border border-slate-200 space-y-4">
+                        <h4 class="font-bold">Portal Branding</h4>
+                        <div><label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Color</label><input type="color" name="primaryColor" value="${data.primaryColor}" class="w-full h-8 rounded shrink-0"></div>
+                        <div><label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Welcome Text</label><input type="text" name="companyPrompt" value="${data.companyPrompt}" class="theme-input"></div>
+                        <button type="submit" class="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold">Save Settings</button>
+                    </div>
+                </form>`;
+                document.getElementById('form-portal-settings').onsubmit = async (e) => {
+                    e.preventDefault();
+                    const fd = new FormData(e.target);
+                    const s = { primaryColor: fd.get('primaryColor'), companyPrompt: fd.get('companyPrompt'), updatedAt: serverTimestamp() };
+                    try {
+                        // Using setDoc with UID-linked doc ID to avoid broad collection permissions
+                        await setDoc(doc(db, "settings", "publicPortal"), s);
+                        showToast("Settings Saved");
+                    } catch (e) {
+                        console.error("Portal Save Error:", e);
+                        showError("Permission Denied: Ensure Firestore allows writing to 'settings/publicPortal'");
+                    }
+                };
+            } catch (e) {
+                console.error("Portal Load Error:", e);
+                showError("Load failed");
+            }
+        };
+
+        window.renderOrganogram = () => {
+            const container = document.getElementById('organogram-container');
+            if (!container) return;
+
+            const hired = cachedCandidates.filter(c => c.stage === 'Hired');
+            const depts = [...new Set(cachedJobs.map(j => j.department).filter(Boolean))];
+
+            if (depts.length === 0 && hired.length === 0) {
+                container.innerHTML = `<div class="py-20 text-center text-slate-400">No organizational data available yet.</div>`;
+                return;
+            }
+
+            // Build hierarchy map: Dept -> JobTitle -> [Candidates]
+            const hierarchy = {};
+            depts.forEach(d => {
+                hierarchy[d] = {};
+                const jobsInDept = cachedJobs.filter(j => j.department === d);
+                jobsInDept.forEach(j => {
+                    hierarchy[d][j.title] = hired.filter(c => c.jobId === j.id);
+                });
+            });
+
+            container.innerHTML = `
+                <div class="flex flex-col items-center gap-12 w-full py-8">
+                    <!-- Root node (Company) -->
+                    <div class="flex flex-col items-center group">
+                        <div class="px-8 py-4 bg-blue-600 text-white rounded-2xl shadow-xl font-bold text-lg border-2 border-blue-400/50 group-hover:scale-105 transition-transform">
+                            Brawn Labs
+                        </div>
+                        <div class="w-px h-12 bg-blue-200 dark:bg-slate-700"></div>
+                    </div>
+
+                    <!-- Departments Level -->
+                    <div class="flex flex-wrap justify-center gap-16 relative w-full">
+                        <!-- Connecting Line for Horizontal Departments -->
+                        <div class="absolute top-0 left-10 right-10 h-px bg-blue-100 dark:bg-slate-800 hidden md:block" style="top: -1px;"></div>
+                        
+                        ${Object.keys(hierarchy).map(dept => `
+                            <div class="flex flex-col items-center min-w-[200px]">
+                                <div class="w-px h-6 bg-blue-200 dark:bg-slate-700"></div>
+                                <div class="px-6 py-3 bg-slate-800 dark:bg-slate-700 text-white rounded-xl shadow-lg font-bold text-sm mb-6 border border-slate-600">
+                                    ${dept}
+                                </div>
+                                
+                                <div class="space-y-4 w-full">
+                                    ${Object.keys(hierarchy[dept]).map(role => {
+                const cands = hierarchy[dept][role];
+                return `
+                                            <div class="flex flex-col items-center">
+                                                <div class="px-4 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg w-full text-center">
+                                                    <div class="text-[10px] uppercase font-bold text-blue-500 mb-1">${role}</div>
+                                                    <div class="flex flex-col gap-1">
+                                                        ${cands.length > 0 ? cands.map(c => `
+                                                            <div class="text-xs font-semibold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 py-1 px-2 rounded border border-slate-100 dark:border-slate-700 shadow-sm flex items-center justify-center gap-2">
+                                                                <i class="fas fa-user-circle text-blue-400"></i> ${c.name}
+                                                            </div>
+                                                        `).join('') : '<div class="text-[9px] text-slate-400 italic">Vacant Position</div>'}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        `;
+            }).join('')}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        };
+
+        window.renderTalentPool = () => {
+            const table = document.getElementById('talent-pool-table-body');
+            if (!table) return;
+            const q = getEffectiveQuery('talentpool');
+            const list = cachedCandidates.filter(c => !q || c.name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q));
+            if (list.length === 0) { table.innerHTML = `<tr><td colspan="4" class="p-10 text-center text-slate-400">Empty Talent Pool.</td></tr>`; return; }
+            table.innerHTML = list.map(c => `
+                <tr class="border-b border-slate-50 hover:bg-slate-50/50 transition">
+                    <td class="px-6 py-4"><div class="font-bold text-slate-800">${highlight(c.name, q)}</div><div class="text-[10px] text-slate-500">${highlight(c.email, q)}</div></td>
+                    <td class="px-6 py-4 text-sm text-slate-600">${c.experience || 0} Yrs Exp</td>
+                    <td class="px-6 py-4">
+                        <div class="flex flex-wrap gap-1">
+                            ${(c.tags || []).map(t => `<span class="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full">${t}</span>`).join('')}
+                            <input type="text" placeholder="+ Tag" class="text-[10px] border-none bg-transparent outline-none w-12" onkeydown="if(event.key==='Enter') addCandidateTag('${c.id}', this.value)">
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 text-right">
+                        <button onclick="editCandidate('${c.id}')" class="text-blue-500 text-xs font-bold px-3 py-1 bg-blue-50 rounded-lg hover:bg-blue-100 transition">View Profile</button>
+                    </td>
+                </tr>`).join('');
+        };
+
+        window.addCandidateTag = async (id, tag) => {
+            if (!tag.trim()) return;
+            try {
+                const c = cachedCandidates.find(x => x.id === id);
+                const tags = [...(c.tags || [])];
+                if (!tags.includes(tag.trim())) {
+                    tags.push(tag.trim());
+                    await updateDoc(doc(db, "candidates", id), { tags });
+                    c.tags = tags; renderTalentPool();
+                }
+            } catch (e) { showError("Failed"); }
+        };
+
+        document.getElementById('form-task').onsubmit = async (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.target);
+            try {
+                await addDoc(collection(db, "tasks"), {
+                    title: fd.get('title'),
+                    priority: fd.get('priority'),
+                    dueDate: fd.get('dueDate'),
+                    status: 'todo',
+                    createdAt: serverTimestamp()
+                });
+                closeModal('modal-task'); showToast("Task Created");
+            } catch (e) { showError("Failed"); }
+        };
+
+
     </script>
 </body>
 

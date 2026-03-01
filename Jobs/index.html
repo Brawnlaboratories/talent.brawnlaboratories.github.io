@@ -91,8 +91,9 @@
     <!-- Header / Branding -->
     <div class="w-full max-w-4xl flex justify-between items-center mb-8">
         <div class="text-left">
-            <h1 class="text-3xl md:text-4xl font-extrabold text-blue-600 tracking-tight">Recruitment Suite</h1>
-            <p class="text-slate-500 mt-2 font-medium">Join our team - Apply below</p>
+            <h1 id="portal-brand-name" class="text-3xl md:text-4xl font-extrabold text-blue-600 tracking-tight">
+                Recruitment Suite</h1>
+            <p id="portal-brand-tagline" class="text-slate-500 mt-2 font-medium">Join our team - Apply below</p>
         </div>
         <button id="logout-btn"
             class="hidden bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2">
@@ -272,6 +273,22 @@
                         </select>
                     </div>
                 </div>
+                <!-- Job Description Display Container -->
+                <div id="job-description-container"
+                    class="mt-5 hidden animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div
+                        class="bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800/30 rounded-xl p-5">
+                        <h4
+                            class="text-xs font-bold uppercase tracking-widest text-blue-600 mb-3 flex items-center gap-2">
+                            <i class="fas fa-info-circle"></i>
+                            Job Responsibilities
+                        </h4>
+                        <div id="job-description-content"
+                            class="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
+                            <!-- Injected by JS -->
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- CTC & Financials -->
@@ -366,7 +383,7 @@
             signInWithEmailAndPassword,
             signOut
         } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, getDocs, doc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         // FIREBASE CONFIG
         const firebaseConfig = {
@@ -530,6 +547,7 @@
                 }
 
                 loadJobs();
+                loadPortalSettings();
             } else {
                 authenticatedUser = null;
                 // UI Reset
@@ -543,8 +561,64 @@
                 emailAuthBtn.disabled = false;
                 emailAuthBtn.textContent = (authMode === 'login' ? 'Sign In' : 'Sign Up');
                 googleLoginBtn.disabled = false;
+                loadPortalSettings(); // Still load branding for non-auth users
             }
         });
+
+        // Load Portal Settings
+        function loadPortalSettings() {
+            onSnapshot(doc(db, "settings", "publicPortal"), (snapshot) => {
+                if (snapshot.exists()) {
+                    const data = snapshot.data();
+                    if (data.companyPrompt) {
+                        document.getElementById('portal-brand-tagline').innerText = data.companyPrompt;
+                    }
+                    if (data.primaryColor) {
+                        const color = data.primaryColor;
+                        // Update Header Text
+                        const brandName = document.getElementById('portal-brand-name');
+                        brandName.style.color = color;
+                        brandName.classList.remove('text-blue-600');
+
+                        // Update Buttons
+                        const buttons = [
+                            document.getElementById('email-auth-btn'),
+                            document.getElementById('submit-btn'),
+                            document.getElementById('auth-toggle-btn')
+                        ];
+                        buttons.forEach(btn => {
+                            if (btn) {
+                                if (btn.id === 'auth-toggle-btn') {
+                                    btn.style.color = color;
+                                } else {
+                                    btn.style.backgroundColor = color;
+                                    btn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                                }
+                            }
+                        });
+
+                        // Update Highlights
+                        const highlights = document.querySelectorAll('.text-blue-500, .text-blue-600, .text-blue-700');
+                        highlights.forEach(el => {
+                            if (el.id !== 'portal-brand-name' && !el.closest('button')) {
+                                el.style.color = color;
+                            }
+                        });
+
+                        // Update Focus Ring and Borders
+                        const style = document.createElement('style');
+                        style.innerHTML = `
+                            .theme-input:focus { border-color: ${color} !important; box-shadow: 0 0 0 3px ${color}20 !important; }
+                            .border-blue-200 { border-color: ${color}40 !important; }
+                            .bg-blue-50 { background-color: ${color}10 !important; }
+                            .text-blue-500 { color: ${color} !important; }
+                            .text-blue-600 { color: ${color} !important; }
+                        `;
+                        document.head.appendChild(style);
+                    }
+                }
+            });
+        }
 
         // File Input Change Listener
         resumeFileInput.addEventListener('change', (e) => {
@@ -612,6 +686,25 @@
 
         deptSelect.addEventListener('change', (e) => {
             populateJobs(e.target.value);
+            document.getElementById('job-description-container').classList.add('hidden');
+        });
+
+        jobSelect.addEventListener('change', (e) => {
+            const jobId = e.target.value;
+            const container = document.getElementById('job-description-container');
+            const content = document.getElementById('job-description-content');
+
+            if (jobId) {
+                const job = allJobs.find(j => j.id === jobId);
+                if (job && job.description && job.description.trim()) {
+                    content.textContent = job.description; // Use textContent for safety, whitespace-pre-line handles display
+                    container.classList.remove('hidden');
+                } else {
+                    container.classList.add('hidden');
+                }
+            } else {
+                container.classList.add('hidden');
+            }
         });
 
         // Cloudinary Upload Logic
