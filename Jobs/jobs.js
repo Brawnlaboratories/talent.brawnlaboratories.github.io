@@ -50,15 +50,84 @@ const submitBtn = document.getElementById('submit-btn');
 
 const candidateNameInput = document.getElementById('candidate-name');
 const candidateEmailInput = document.getElementById('candidate-email');
+const companySelect = document.getElementById('company-select');
 const deptSelect = document.getElementById('dept-select');
 const jobSelect = document.getElementById('job-select');
 const resumeFileInput = document.getElementById('resumeFile');
 const resumeFileLabel = document.getElementById('resumeFileLabel');
 
 let allJobs = [];
+let allCompanies = [];
 let portalSettings = null;
 let authenticatedUser = null;
 let authMode = 'login'; // 'login' or 'signup'
+
+// --- Other Qualification Toggle ---
+const qualificationSelect = document.getElementById('qualification-select');
+const otherQualWrap = document.getElementById('other-qualification-wrap');
+const otherQualInput = document.getElementById('other-qualification-input');
+if (qualificationSelect && otherQualWrap && otherQualInput) {
+    qualificationSelect.addEventListener('change', () => {
+        const isOther = qualificationSelect.value === 'Other';
+        otherQualWrap.classList.toggle('hidden', !isOther);
+        otherQualInput.required = isOther;
+        if (!isOther) otherQualInput.value = '';
+    });
+}
+
+// --- Pincode Auto-fill (India Post API) ---
+(function initPincodeAutofill() {
+    const pincodeInput = document.querySelector('input[name="addressPincode"]');
+    const cityInput = document.querySelector('input[name="addressCity"]');
+    const stateSelect = document.querySelector('select[name="addressState"]');
+    if (!pincodeInput || !cityInput || !stateSelect) return;
+
+    // Helper: find closest matching <option> in the state select
+    function setStateOption(stateName) {
+        const opts = Array.from(stateSelect.options);
+        const match = opts.find(o => o.text.toLowerCase() === stateName.toLowerCase());
+        if (match) {
+            stateSelect.value = match.value || match.text;
+        }
+    }
+
+    let _timeout;
+    pincodeInput.addEventListener('input', () => {
+        const pin = pincodeInput.value.replace(/\D/g, '');
+        clearTimeout(_timeout);
+
+        // Clear hints if incomplete
+        if (pin.length < 6) {
+            pincodeInput.classList.remove('border-green-400', 'border-red-400');
+            return;
+        }
+
+        // Debounce 400 ms so we don't fire on every keystroke
+        _timeout = setTimeout(async () => {
+            pincodeInput.placeholder = 'Looking up…';
+            pincodeInput.classList.remove('border-green-400', 'border-red-400');
+            try {
+                const res = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
+                const json = await res.json();
+                const record = json?.[0];
+                if (record?.Status === 'Success' && record.PostOffice?.length > 0) {
+                    const po = record.PostOffice[0];
+                    // Only fill if blank (don't override user edits)
+                    if (!cityInput.value) cityInput.value = po.District || po.Name || '';
+                    setStateOption(po.State || '');
+                    pincodeInput.classList.add('border-green-400');
+                } else {
+                    pincodeInput.classList.add('border-red-400');
+                }
+            } catch {
+                // Silently fail — network issues shouldn't break the form
+            } finally {
+                pincodeInput.placeholder = 'e.g. 411001';
+            }
+        }, 400);
+    });
+})();
+
 
 // --- WIZARD SETUP ---
 const wizardSteps = [
@@ -140,8 +209,11 @@ function renderReviewStep() {
                 { label: 'Email', value: val('email') },
                 { label: 'Phone', value: val('phone') },
                 { label: 'Gender', value: val('gender') },
-                { label: 'Qualification', value: val('qualification') },
-                { label: 'Address', value: val('address') },
+                { label: 'Qualification', value: val('qualification') === 'Other' ? (val('qualificationOther') || 'Other') : val('qualification') },
+                { label: 'City', value: val('addressCity') },
+                { label: 'State', value: val('addressState') },
+                { label: 'Pincode', value: val('addressPincode') },
+                { label: 'Street', value: val('addressStreet') },
             ]
         },
         {
@@ -160,6 +232,7 @@ function renderReviewStep() {
             icon: 'fa-layer-group',
             stepIndex: 2,
             rows: [
+                { label: 'Company', value: (() => { const c = allCompanies.find(c => c.id === (companySelect?.value || '')); return c ? c.name : (companySelect?.value || ''); })() },
                 { label: 'Department', value: deptLabel },
                 { label: 'Position', value: jobLabel },
             ]
@@ -229,12 +302,42 @@ window._wizardGoTo = (index) => showStep(index);
 function validateCurrentStep() {
     const container = stepEls[currentStepIndex];
     if (!container) return true;
+
+    // Clear previous errors
+    container.querySelectorAll('.border-red-400').forEach(el => {
+        el.classList.remove('border-red-400', 'ring-2', 'ring-red-100');
+    });
+
     const requiredFields = Array.from(container.querySelectorAll('[required]'));
+    let firstInvalid = null;
+
     for (const field of requiredFields) {
-        if (!field.value) {
-            field.focus();
-            return false;
+        let isValid = true;
+        if (field.type === 'file') {
+            isValid = field.files && field.files.length > 0;
+        } else {
+            isValid = field.value && field.value.trim() !== "";
         }
+
+        if (!isValid) {
+            field.classList.add('border-red-400', 'ring-2', 'ring-red-100');
+            if (!firstInvalid) firstInvalid = field;
+
+            // Add one-time listener to clear error on input
+            const clearError = () => {
+                field.classList.remove('border-red-400', 'ring-2', 'ring-red-100');
+                field.removeEventListener('input', clearError);
+                field.removeEventListener('change', clearError);
+            };
+            field.addEventListener('input', clearError);
+            field.addEventListener('change', clearError);
+        }
+    }
+
+    if (firstInvalid) {
+        firstInvalid.focus();
+        firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return false;
     }
     return true;
 }
@@ -434,9 +537,72 @@ function clearBackgroundImage() {
     setTimeout(() => { bgLayer.style.backgroundImage = 'none'; }, 420);
 }
 
+// Map from portal step id → HTML element id
+const STEP_ID_MAP = {
+    personal: 'step-personal',
+    professional: 'step-professional',
+    position: 'step-position',
+    financials: 'step-financials',
+    resume: 'step-resume',
+    review: 'step-review'
+};
+
+// Full catalogue of all possible steps
+const ALL_WIZARD_STEPS = [
+    { id: 'step-personal', label: 'Personal Details', settingId: 'personal', alwaysOn: true },
+    { id: 'step-professional', label: 'Professional Details', settingId: 'professional', alwaysOn: false },
+    { id: 'step-position', label: 'Applied Position', settingId: 'position', alwaysOn: false },
+    { id: 'step-financials', label: 'CTC & Financials', settingId: 'financials', alwaysOn: false },
+    { id: 'step-resume', label: 'Resume Upload', settingId: 'resume', alwaysOn: false },
+    { id: 'step-review', label: 'Review & Submit', settingId: 'review', alwaysOn: true }
+];
+
+function applyWizardSteps(stepsConfig) {
+    // Build a lookup: settingId → enabled
+    const enabledMap = {};
+    (stepsConfig || []).forEach(s => { enabledMap[s.id] = s.enabled !== false; });
+
+    // Rebuild the live wizardSteps array that the rest of the wizard uses
+    wizardSteps.length = 0;
+    ALL_WIZARD_STEPS.forEach(def => {
+        const el = document.getElementById(def.id);
+        if (!el) return;
+        const isEnabled = def.alwaysOn || enabledMap[def.settingId] !== false;
+        if (isEnabled) {
+            // Make step visible (it may have been hidden by a previous call)
+            el.style.display = '';
+            // Re-enable required fields
+            el.querySelectorAll('[data-was-required]').forEach(field => {
+                field.required = true;
+                field.removeAttribute('data-was-required');
+            });
+            wizardSteps.push({ id: def.id, label: def.label });
+        } else {
+            // Hide step element
+            el.style.display = 'none';
+            // Strip required so the browser doesn't block submission
+            el.querySelectorAll('[required]').forEach(field => {
+                field.setAttribute('data-was-required', '1');
+                field.required = false;
+            });
+        }
+    });
+
+    // Also rebuild stepEls reference so showStep works
+    stepEls.length = 0;
+    wizardSteps.forEach(s => stepEls.push(document.getElementById(s.id)));
+
+    // Reset to first step safely
+    currentStepIndex = 0;
+    showStep(0);
+}
+
 // Shared function to apply settings
 function applyPortalSettings(data) {
     if (!data) return;
+
+    // Apply wizard step visibility first
+    if (data.steps) applyWizardSteps(data.steps);
 
     // 0. Handle Typography & Global Background
     if (data.fontFamily) {
@@ -449,6 +615,8 @@ function applyPortalSettings(data) {
         clearBackgroundImage();
         document.body.classList.add('bg-slate-50', 'dark:bg-slate-950');
     }
+
+    // UX & Styling logic removed as per request (falling back to CSS defaults)
 
     // 1. Handle Locked State
     const lockedContainer = document.getElementById('locked-container');
@@ -476,15 +644,79 @@ function applyPortalSettings(data) {
     if (data.logoUrl) {
         document.getElementById('portal-logo-container').classList.remove('hidden');
         document.getElementById('portal-logo').src = data.logoUrl;
+
+        const footerLogoContainer = document.getElementById('footer-logo-container');
+        if (footerLogoContainer) {
+            footerLogoContainer.classList.remove('hidden');
+            footerLogoContainer.classList.add('flex');
+            document.getElementById('footer-logo').src = data.logoUrl;
+        }
     } else {
         document.getElementById('portal-logo-container').classList.add('hidden');
+        const footerLogoContainer = document.getElementById('footer-logo-container');
+        if (footerLogoContainer) {
+            footerLogoContainer.classList.add('hidden');
+            footerLogoContainer.classList.remove('flex');
+        }
     }
-
 
     // 3. Handle Welcome Text & Colors
     if (data.companyPrompt) {
         document.getElementById('portal-brand-tagline').innerText = data.companyPrompt;
     }
+
+    // 3.1 About Company Content
+    const aboutContainer = document.getElementById('portal-about-container');
+    const aboutText = document.getElementById('portal-about-text');
+    if (data.aboutCompany && aboutContainer && aboutText && !data.isLocked) {
+        aboutContainer.classList.remove('hidden');
+        aboutText.innerText = data.aboutCompany;
+
+    } else if (aboutContainer) {
+        aboutContainer.classList.add('hidden');
+    }
+
+    // 3.2 Footer & Social
+    const footerEmail = document.getElementById('footer-support-email');
+    const footerPhone = document.getElementById('footer-support-phone');
+    if (data.supportEmail && footerEmail) {
+        footerEmail.classList.remove('hidden');
+        footerEmail.classList.add('flex');
+        document.getElementById('footer-email-text').innerText = data.supportEmail;
+        const emailLink = document.getElementById('footer-email-link');
+        if (emailLink) emailLink.href = 'mailto:' + data.supportEmail;
+    }
+    if (data.supportPhone && footerPhone) {
+        footerPhone.classList.remove('hidden');
+        footerPhone.classList.add('flex');
+        document.getElementById('footer-phone-text').innerText = data.supportPhone;
+        const phoneLink = document.getElementById('footer-phone-link');
+        if (phoneLink) phoneLink.href = 'tel:' + data.supportPhone;
+    }
+
+    const socialLinks = {
+        'link-linkedin': data.socialLinkedin
+    };
+    Object.keys(socialLinks).forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            if (socialLinks[id]) {
+                el.classList.remove('hidden');
+                el.href = socialLinks[id];
+            } else {
+                el.classList.add('hidden');
+            }
+        }
+    });
+
+    const footerYear = document.getElementById('footer-year');
+    if (footerYear) footerYear.innerText = new Date().getFullYear();
+    // footerBrand handling removed or simplified if companyName not in data
+    const footerBrand = document.getElementById('footer-brand-name');
+    if (footerBrand) footerBrand.innerText = data.companyName || "Recruitment Suite";
+    const ftBrandLogo = document.getElementById('footer-brand-name-logo');
+    if (ftBrandLogo) ftBrandLogo.innerText = data.companyName || "Recruitment Suite";
+
     if (data.primaryColor) {
         const color = data.primaryColor;
         const brandName = document.getElementById('portal-brand-name');
@@ -494,11 +726,13 @@ function applyPortalSettings(data) {
         const buttons = [
             document.getElementById('email-auth-btn'),
             document.getElementById('submit-btn'),
-            document.getElementById('auth-toggle-btn')
+            document.getElementById('auth-toggle-btn'),
+            document.getElementById('wizard-next-btn'),
+            document.getElementById('wizard-back-btn')
         ];
         buttons.forEach(btn => {
             if (btn) {
-                if (btn.id === 'auth-toggle-btn') {
+                if (btn.id === 'auth-toggle-btn' || btn.id === 'wizard-back-btn') {
                     btn.style.color = color;
                 } else {
                     btn.style.backgroundColor = color;
@@ -507,10 +741,14 @@ function applyPortalSettings(data) {
             }
         });
 
-        const highlights = document.querySelectorAll('.text-blue-500, .text-blue-600, .text-blue-700');
+        const highlights = document.querySelectorAll('.text-blue-500, .text-blue-600, .text-blue-700, .bg-blue-600');
         highlights.forEach(el => {
             if (el.id !== 'portal-brand-name' && !el.closest('button')) {
-                el.style.color = color;
+                if (el.classList.contains('bg-blue-600')) {
+                    el.style.backgroundColor = color;
+                } else {
+                    el.style.color = color;
+                }
             }
         });
 
@@ -528,6 +766,7 @@ function applyPortalSettings(data) {
             .text-blue-500 { color: ${color} !important; }
             .text-blue-600 { color: ${color} !important; }
             .peer-checked\\:bg-blue-600:checked ~ div { background-color: ${color} !important; }
+            #wizard-progress-bar { background-color: ${color} !important; }
         `;
     }
 }
@@ -549,56 +788,87 @@ resumeFileInput.addEventListener('change', (e) => {
 // Load Jobs
 async function loadJobs() {
     try {
-        deptSelect.innerHTML = '<option value="">Loading...</option>';
-        jobSelect.innerHTML = '<option value="">Loading...</option>';
+        if (companySelect) companySelect.innerHTML = '<option value="">Loading...</option>';
+        if (deptSelect) deptSelect.innerHTML = '<option value="">Loading...</option>';
+        if (jobSelect) jobSelect.innerHTML = '<option value="">Loading...</option>';
+
+        // Fetch companies
+        const companiesSnapshot = await getDocs(collection(db, 'companies'));
+        const allCompaniesRaw = [];
+        companiesSnapshot.forEach(docSnap => allCompaniesRaw.push({ id: docSnap.id, ...docSnap.data() }));
+        allCompaniesRaw.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
         const jobsSnapshot = await getDocs(collection(db, 'jobs'));
         allJobs = [];
 
         // Get visibility constraints from settings
+        const openCompanies = portalSettings?.openCompanies || [];
         const openDepts = portalSettings?.openDepartments || [];
         const openPositions = portalSettings?.openPositions || [];
 
         jobsSnapshot.forEach(docSnap => {
             const data = docSnap.data();
             if (data.status === 'Open') {
-                // Apply Visibility Filtering
+                const compMatch = openCompanies.length === 0 || openCompanies.includes(data.companyId);
                 const deptMatch = openDepts.length === 0 || openDepts.includes(data.department);
                 const posMatch = openPositions.length === 0 || openPositions.includes(data.title);
-
-                if (deptMatch && posMatch) {
+                if (compMatch && deptMatch && posMatch) {
                     allJobs.push({ id: docSnap.id, ...data });
                 }
             }
         });
 
-        // Populate Depts
-        const depts = [...new Set(allJobs.map(j => j.department).filter(Boolean))].sort();
-        deptSelect.innerHTML = '<option value="">-- All Departments --</option>';
-        depts.forEach(dept => {
-            const opt = document.createElement('option');
-            opt.value = dept;
-            opt.textContent = dept;
-            deptSelect.appendChild(opt);
-        });
+        // Filter companies to only those that have visible jobs
+        const companyIdsWithJobs = new Set(allJobs.map(j => j.companyId).filter(Boolean));
+        allCompanies = allCompaniesRaw.filter(c => companyIdsWithJobs.has(c.id));
 
-        populateJobs(); // show all by default
+        // Populate Company dropdown
+        if (companySelect) {
+            companySelect.innerHTML = '<option value="">-- Select Company --</option>';
+            allCompanies.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = c.name || c.id;
+                companySelect.appendChild(opt);
+            });
+        }
+
+        // Reset dependent dropdowns
+        if (deptSelect) deptSelect.innerHTML = '<option value="">-- Select Company First --</option>';
+        if (jobSelect) jobSelect.innerHTML = '<option value="">-- Select Company First --</option>';
+
     } catch (err) {
         console.error("Error loading jobs: ", err);
-        deptSelect.innerHTML = '<option value="">Error Loading</option>';
-        jobSelect.innerHTML = '<option value="">Error Loading</option>';
+        if (companySelect) companySelect.innerHTML = '<option value="">Error Loading</option>';
+        if (deptSelect) deptSelect.innerHTML = '<option value="">Error Loading</option>';
+        if (jobSelect) jobSelect.innerHTML = '<option value="">Error Loading</option>';
     }
 }
 
-function populateJobs(filteredDept = "") {
+function populateDepts(companyId) {
+    const jobs = companyId ? allJobs.filter(j => j.companyId === companyId) : allJobs;
+    const depts = [...new Set(jobs.map(j => j.department).filter(Boolean))].sort();
+    if (deptSelect) {
+        deptSelect.innerHTML = '<option value="">-- All Departments --</option>';
+        depts.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value = d;
+            opt.textContent = d;
+            deptSelect.appendChild(opt);
+        });
+    }
+    // Reset position dropdown when company changes
+    if (jobSelect) jobSelect.innerHTML = '<option value="">-- Select Position --</option>';
+    populateJobs(companyId, '');
+}
+
+function populateJobs(companyId = "", filteredDept = "") {
+    if (!jobSelect) return;
     jobSelect.innerHTML = '<option value="">-- Select Position --</option>';
-    const filteredJobs = filteredDept
-        ? allJobs.filter(j => j.department === filteredDept)
-        : allJobs;
-
-    // Sort by title
+    let filteredJobs = allJobs;
+    if (companyId) filteredJobs = filteredJobs.filter(j => j.companyId === companyId);
+    if (filteredDept) filteredJobs = filteredJobs.filter(j => j.department === filteredDept);
     filteredJobs.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
-
     filteredJobs.forEach(job => {
         const opt = document.createElement('option');
         opt.value = job.id;
@@ -607,10 +877,20 @@ function populateJobs(filteredDept = "") {
     });
 }
 
-deptSelect.addEventListener('change', (e) => {
-    populateJobs(e.target.value);
-    document.getElementById('job-description-container').classList.add('hidden');
-});
+if (companySelect) {
+    companySelect.addEventListener('change', (e) => {
+        populateDepts(e.target.value);
+        document.getElementById('job-description-container').classList.add('hidden');
+    });
+}
+
+if (deptSelect) {
+    deptSelect.addEventListener('change', (e) => {
+        const companyId = companySelect ? companySelect.value : '';
+        populateJobs(companyId, e.target.value);
+        document.getElementById('job-description-container').classList.add('hidden');
+    });
+}
 
 jobSelect.addEventListener('change', (e) => {
     const jobId = e.target.value;
@@ -678,39 +958,55 @@ form.addEventListener('submit', async (e) => {
         const formData = new FormData(form);
         const data = Object.fromEntries(formData.entries());
 
-        // --- 30-DAY COOLDOWN CHECK ---
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        // --- GRACEFUL JOB CLOSURE CHECK ---
+        if (data.jobId) {
+            const jobRef = doc(db, 'jobs', data.jobId);
+            const jobSnap = await getDoc(jobRef);
+            if (jobSnap.exists()) {
+                const jobData = jobSnap.data();
 
-        const q = query(
-            collection(db, 'candidates'),
-            where('email', '==', data.email.trim())
-        );
-        const recentApps = await getDocs(q);
+                // If it's explicitly Draft, block perfectly.
+                if (jobData.status === 'Draft') {
+                    alert("This job is currently in Draft mode and cannot accept applications.");
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalBtnHtml;
+                    submitBtn.classList.remove('opacity-80', 'cursor-not-allowed');
+                    return;
+                }
 
-        let hasRecent = false;
-        recentApps.forEach(docSnap => {
-            const appData = docSnap.data();
-            if (appData.createdAt && typeof appData.createdAt.toDate === 'function') {
-                if (appData.createdAt.toDate() >= thirtyDaysAgo) {
-                    hasRecent = true;
+                // If Closed, check Grace Period
+                if (jobData.status === 'Closed') {
+                    // Assume 30 minutes grace period
+                    let gracePeriodPassed = true;
+                    if (jobData.closingDate) {
+                        try {
+                            // The closingDate might be just 'YYYY-MM-DD'. Let's parse it.
+                            // If they used the quick-toggle recently, the timestamp might not be precise,
+                            // but if it's identical to 'today' (the date portion), we give them the grace.
+                            const todayStr = new Date().toISOString().split('T')[0];
+                            if (jobData.closingDate === todayStr) {
+                                // Close happened today, allow grace
+                                gracePeriodPassed = false;
+                            }
+                        } catch (e) { }
+                    }
+                    if (gracePeriodPassed) {
+                        alert("We're sorry, but this job opening has just been closed. Thank you for your interest.");
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = originalBtnHtml;
+                        submitBtn.classList.remove('opacity-80', 'cursor-not-allowed');
+                        return;
+                    }
                 }
-            } else if (appData.createdAt) {
-                // Fallback for timestamps that might be raw JS Dates or numbers
-                if (new Date(appData.createdAt) >= thirtyDaysAgo) {
-                    hasRecent = true;
-                }
+            } else {
+                alert("We're sorry, this job no longer exists.");
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnHtml;
+                submitBtn.classList.remove('opacity-80', 'cursor-not-allowed');
+                return;
             }
-        });
-
-        if (hasRecent) {
-            alert("You have already applied within the last 30 days. Please wait before applying again.");
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = originalBtnHtml;
-            submitBtn.classList.remove('opacity-80', 'cursor-not-allowed');
-            return;
         }
-        // ------------------------------
+        // ----------------------------------
 
         let resumeUrl = "";
         if (file) {
@@ -727,8 +1023,15 @@ form.addEventListener('submit', async (e) => {
             email: data.email || "",
             phone: data.phone || "",
             gender: data.gender || "",
-            qualification: data.qualification || "",
-            address: data.address || "",
+            qualification: data.qualification === 'Other' ? (data.qualificationOther || 'Other') : (data.qualification || ""),
+
+            // Structured address fields
+            addressStreet: data.addressStreet || "",
+            addressCity: data.addressCity || "",
+            addressState: data.addressState || "",
+            addressPincode: data.addressPincode || "",
+            // Composite address for backwards-compat display
+            address: [data.addressStreet, data.addressCity, data.addressState, data.addressPincode].filter(Boolean).join(', '),
 
             currentCompany: data.currentCompany || "",
             designation: data.designation || "",

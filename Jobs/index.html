@@ -68,9 +68,10 @@
         </div>
     </div>
 
+
     <!-- Login Overlay Container -->
     <div id="auth-container"
-        class="w-full max-w-md glass-card p-5 sm:p-8 text-center flex flex-col items-center justify-center mt-4 sm:mt-10">
+        class="w-full max-w-md glass-card p-5 sm:p-8 text-center flex flex-col items-center justify-center mt-4 sm:mt-4">
         <h2 id="auth-title" class="text-2xl font-bold text-slate-800 mb-2">Candidate Login</h2>
         <p id="auth-subtitle" class="text-slate-500 mb-6 text-sm">Please sign in to start your application.</p>
 
@@ -121,7 +122,8 @@
     </div>
 
     <!-- Application Form Container -->
-    <div id="form-container" class="w-full max-w-4xl glass-card p-6 md:p-10 transition-all duration-300 hidden">
+    <div id="form-container"
+        class="w-full max-w-4xl glass-card p-6 md:p-10 mt-6 sm:mt-10 transition-all duration-300 hidden">
         <form id="candidate-form" class="space-y-8">
 
             <!-- Wizard Progress -->
@@ -172,11 +174,15 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-600 mb-1.5">Qualification</label>
-                        <select name="qualification" class="theme-input">
+                        <select name="qualification" id="qualification-select" class="theme-input">
                             <option value="">-- Select Qualification --</option>
                             <optgroup label="School Level">
                                 <option value="10th Pass">10th Pass</option>
                                 <option value="12th Pass">12th Pass</option>
+                            </optgroup>
+                            <optgroup label="Diploma">
+                                <option value="ITI">ITI</option>
+                                <option value="Diploma">Diploma</option>
                             </optgroup>
                             <optgroup label="Undergraduate / Graduate">
                                 <option value="B.Sc">B.Sc</option>
@@ -193,14 +199,88 @@
                                 <option value="M.Tech">M.Tech</option>
                                 <option value="MBA">MBA</option>
                                 <option value="M.Pharm">M.Pharm</option>
+                                <option value="M.A">M.A</option>
+                                <option value="M.Com">M.Com</option>
+                                <option value="Ph.D">Ph.D</option>
                             </optgroup>
                             <option value="Other">Other</option>
                         </select>
                     </div>
+                    <!-- Other Qualification – shown only when "Other" is selected -->
+                    <div id="other-qualification-wrap" class="hidden">
+                        <label class="block text-sm font-medium text-slate-600 mb-1.5">Specify Qualification <span
+                                class="text-red-400">*</span></label>
+                        <input type="text" id="other-qualification-input" name="qualificationOther"
+                            placeholder="e.g. D.Pharm, B.Voc, PGDM…" class="theme-input">
+                    </div>
+                    <!-- Address Section -->
                     <div class="md:col-span-2">
-                        <label class="block text-sm font-medium text-slate-600 mb-1.5">Address</label>
-                        <textarea name="address" rows="2" placeholder="Your full address..."
-                            class="theme-input resize-y"></textarea>
+                        <p
+                            class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3 border-b border-slate-100 pb-2">
+                            Address Details</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-slate-600 mb-1.5">Street / House / Flat
+                                    No.</label>
+                                <input type="text" name="addressStreet"
+                                    placeholder="e.g. Flat 4B, Sunrise Apartments, MG Road" class="theme-input">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-600 mb-1.5">City / Town <span
+                                        class="text-red-400">*</span></label>
+                                <input type="text" name="addressCity" required placeholder="e.g. Pune"
+                                    class="theme-input">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-600 mb-1.5">State</label>
+                                <select name="addressState" class="theme-input bg-white">
+                                    <option value="">-- Select State --</option>
+                                    <option>Andhra Pradesh</option>
+                                    <option>Arunachal Pradesh</option>
+                                    <option>Assam</option>
+                                    <option>Bihar</option>
+                                    <option>Chhattisgarh</option>
+                                    <option>Goa</option>
+                                    <option>Gujarat</option>
+                                    <option>Haryana</option>
+                                    <option>Himachal Pradesh</option>
+                                    <option>Jharkhand</option>
+                                    <option>Karnataka</option>
+                                    <option>Kerala</option>
+                                    <option>Madhya Pradesh</option>
+                                    <option>Maharashtra</option>
+                                    <option>Manipur</option>
+                                    <option>Meghalaya</option>
+                                    <option>Mizoram</option>
+                                    <option>Nagaland</option>
+                                    <option>Odisha</option>
+                                    <option>Punjab</option>
+                                    <option>Rajasthan</option>
+                                    <option>Sikkim</option>
+                                    <option>Tamil Nadu</option>
+                                    <option>Telangana</option>
+                                    <option>Tripura</option>
+                                    <option>Uttar Pradesh</option>
+                                    <option>Uttarakhand</option>
+                                    <option>West Bengal</option>
+                                    <optgroup label="Union Territories">
+                                        <option>Andaman &amp; Nicobar Islands</option>
+                                        <option>Chandigarh</option>
+                                        <option>Dadra &amp; Nagar Haveli and Daman &amp; Diu</option>
+                                        <option>Delhi</option>
+                                        <option>Jammu &amp; Kashmir</option>
+                                        <option>Ladakh</option>
+                                        <option>Lakshadweep</option>
+                                        <option>Puducherry</option>
+                                    </optgroup>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-600 mb-1.5">Pincode</label>
+                                <input type="text" name="addressPincode" maxlength="6" pattern="[0-9]{6}"
+                                    placeholder="e.g. 411001" class="theme-input">
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -250,16 +330,24 @@
                     Applied Position</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div>
+                        <label class="block text-sm font-medium text-slate-600 mb-1.5">Company <span
+                                class="text-red-400">*</span></label>
+                        <select id="company-select" name="companyId" required
+                            class="theme-input bg-slate-50 cursor-pointer">
+                            <option value="">-- Loading Companies... --</option>
+                        </select>
+                    </div>
+                    <div>
                         <label class="block text-sm font-medium text-slate-600 mb-1.5">Department</label>
                         <select id="dept-select" name="jobDepartment" class="theme-input bg-slate-50 cursor-pointer">
-                            <option value="">-- Loading Departments... --</option>
+                            <option value="">-- Select Company First --</option>
                         </select>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-600 mb-1.5">Position <span
                                 class="text-red-400">*</span></label>
                         <select id="job-select" name="jobId" required class="theme-input bg-slate-50 cursor-pointer">
-                            <option value="">-- Loading Positions... --</option>
+                            <option value="">-- Select Company First --</option>
                         </select>
                     </div>
                 </div>
@@ -380,6 +468,81 @@
             Submit Another Application
         </button>
     </div>
+
+    <!-- Spacer to push footer down and guarantee space between form/footer -->
+    <div class="flex-1 w-full min-h-[4rem] md:min-h-[6rem]"></div>
+
+    <!-- Footer Section -->
+    <footer class="w-full max-w-4xl shrink-0 mt-auto mb-2">
+        <div
+            class="glass-card relative overflow-hidden rounded-3xl p-6 md:p-8 border border-white/40 shadow-[0_4px_20px_rgb(0,0,0,0.03)] dark:border-slate-800/60 dark:bg-slate-900/50">
+            <!-- Decorative gradient blur -->
+            <div class="absolute -top-12 -right-12 w-64 h-64 bg-blue-400/10 rounded-full blur-2xl pointer-events-none">
+            </div>
+            <div
+                class="absolute -bottom-12 -left-12 w-64 h-64 bg-indigo-400/10 rounded-full blur-2xl pointer-events-none">
+            </div>
+
+            <div class="relative z-10 flex flex-col gap-6">
+                <!-- Top Section: Brand & Contact -->
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                    <!-- Brand -->
+                    <div id="footer-logo-container" class="hidden items-center gap-3">
+                        <img id="footer-logo" src="" alt="Logo" class="h-8 w-auto object-contain drop-shadow-sm">
+                        <span id="footer-brand-name-logo" class="font-bold text-blue-600 tracking-tight text-lg"></span>
+                    </div>
+
+                    <!-- Contact & Social -->
+                    <div class="flex flex-wrap items-center gap-4 md:gap-6 ml-auto">
+                        <div id="footer-support-email"
+                            class="hidden group items-center gap-2 text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                            <i class="fas fa-envelope text-blue-400"></i>
+                            <a id="footer-email-link" href="#" class="text-xs font-medium"><span
+                                    id="footer-email-text"></span></a>
+                        </div>
+                        <div id="footer-support-phone"
+                            class="hidden group items-center gap-2 text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">
+                            <i class="fas fa-phone text-emerald-400"></i>
+                            <a id="footer-phone-link" href="#" class="text-xs font-medium"><span
+                                    id="footer-phone-text"></span></a>
+                        </div>
+                        <div id="footer-social-links-wrapper"
+                            class="flex items-center gap-3 border-l border-slate-200 pl-4 md:pl-6 dark:border-slate-700">
+                            <a id="link-linkedin" href="#" target="_blank"
+                                class="hidden text-slate-400 hover:text-[#0A66C2] transition-colors text-lg">
+                                <i class="fab fa-linkedin"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="border-slate-100 dark:border-slate-800/60">
+
+                <!-- Bottom Section: About & Copyright -->
+                <div class="flex flex-col md:flex-row justify-between items-end gap-6 text-slate-400">
+                    <!-- About Company -->
+                    <div id="portal-about-container" class="hidden max-w-2xl">
+                        <h4
+                            class="text-[10px] font-bold text-slate-800 dark:text-slate-200 uppercase tracking-widest mb-1.5">
+                            About Us</h4>
+                        <div id="portal-about-text"
+                            class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed font-medium whitespace-pre-wrap">
+                        </div>
+                    </div>
+
+                    <div class="text-left md:text-right shrink-0">
+                        <p class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
+                            Om shree shyaam devay namah
+                        </p>
+                        <p class="text-xs font-medium">
+                            &copy; <span id="footer-year"></span> <span id="footer-brand-name">Recruitment Suite</span>.
+                            All Rights Reserved.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
 
     <!-- Firebase & Logic -->
     <script type="module" src="jobs.js"></script>
