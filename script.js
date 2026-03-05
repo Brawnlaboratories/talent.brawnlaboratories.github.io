@@ -1441,6 +1441,9 @@ function updateDashboard() {
 
     renderUpcomingInterviews();
     renderDashboardTasks();
+
+    // Refresh notification badge whenever data changes
+    if (typeof refreshNotificationBadge === 'function') refreshNotificationBadge();
 }
 
 function renderUpcomingInterviews() {
@@ -1835,8 +1838,8 @@ document.getElementById('form-candidate').onsubmit = async (e) => {
             const cleanDept = (data.jobDepartment || 'Gen').trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
             const now = new Date();
             const dateStr = `${now.getFullYear()}_${String(now.getMonth() + 1).padStart(2, '0')
-                }_${String(now.getDate()).padStart(2, '0')} `;
-            const customPublicId = `${cleanName}_${cleanDept}_${dateStr} `;
+                }_${String(now.getDate()).padStart(2, '0')}`;
+            const customPublicId = `${cleanName}_${cleanDept}_${dateStr}`;
 
             const resumeUrl = await uploadResumeToCloudinary(pendingResumeFile, customPublicId);
             data.resumeUrl = resumeUrl;
@@ -4165,6 +4168,37 @@ window.openProfileView = (type, title, icon, candidateId) => {
     modal.classList.remove('hidden');
 };
 
+// --- SHAREABLE PROFILE LINK ---
+function _shareHash(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        const chr = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + chr;
+        hash |= 0;
+    }
+    return Math.abs(hash).toString(36);
+}
+
+window.generateShareLink = async (candidateId) => {
+    const secret = 'rshr2026';
+    const token = _shareHash(candidateId + ':' + secret);
+    const baseUrl = window.location.href.split('/').slice(0, -1).join('/');
+    const shareUrl = `${baseUrl}/share.html?id=${candidateId}&token=${token}`;
+    try {
+        await navigator.clipboard.writeText(shareUrl);
+        showToast('Profile link copied to clipboard!');
+    } catch (e) {
+        // Fallback for older browsers
+        const ta = document.createElement('textarea');
+        ta.value = shareUrl;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+        showToast('Profile link copied to clipboard!');
+    }
+};
+
 window.showCandidateProfile = (id) => {
     const c = cachedCandidates.find(x => x.id === id);
     if (!c) return;
@@ -4247,6 +4281,22 @@ window.showCandidateProfile = (id) => {
                             <p class="text-[10px] text-slate-400 uppercase">Notice Period</p>
                             <p class="profile-value">${c.noticePeriod || 0} Days</p>
                         </div>
+                    </div>
+                </div>
+                <div class="profile-data-card md:col-span-2 border-dashed border-indigo-200 bg-indigo-50/20">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600">
+                                <i class="fas fa-share-nodes text-xl"></i>
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-slate-800 dark:text-slate-200">Share Profile</p>
+                                <p class="text-xs text-slate-500">Generate a read-only link for hiring managers</p>
+                            </div>
+                        </div>
+                        <button onclick="generateShareLink('${c.id}')" class="px-6 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-500/30 hover:scale-105 transition-transform flex items-center gap-2">
+                            <i class="fas fa-link"></i> Copy Link
+                        </button>
                     </div>
                 </div>
             `;
@@ -5150,5 +5200,229 @@ document.addEventListener('keydown', (e) => {
     else if (key === '.') {
         e.preventDefault();
         calcNum('.');
+    }
+});
+
+// ===================== NOTIFICATION CENTER LOGIC =====================
+let dismissedNotifKeys = JSON.parse(localStorage.getItem('dismissedNotifs') || '[]');
+
+function computeNotifications() {
+    const notifs = [];
+    const todayStr = new Date().toISOString().split('T')[0];
+    const now = Date.now();
+    const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+
+    // 1. Interviews Today
+    const todayInterviews = cachedInterviews.filter(i => i.dateTime && i.dateTime.startsWith(todayStr));
+    todayInterviews.forEach(i => {
+        const cand = cachedCandidates.find(c => c.id === i.candidateId);
+        const dt = new Date(i.dateTime);
+        const timeStr = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        notifs.push({
+            key: `int-today-${i.id}`,
+            icon: 'fa-calendar-check',
+            color: 'text-orange-500 bg-orange-100 dark:bg-orange-900/30',
+            title: `Interview at ${timeStr}`,
+            desc: cand ? cand.name : 'Unknown candidate',
+            action: () => showSection('interviews'),
+            category: 'Interviews Today'
+        });
+    });
+
+    // 2. Candidates Stuck (same stage for 7+ days)
+    cachedCandidates.forEach(c => {
+        if (['Hired', 'Rejected', 'Backed Out', 'Not Interested'].includes(c.stage)) return;
+        const created = c.updatedAt || c.createdAt;
+        if (!created) return;
+        const ts = created.seconds ? created.seconds * 1000 : new Date(created).getTime();
+        if (now - ts > SEVEN_DAYS) {
+            const daysStuck = Math.floor((now - ts) / (24 * 60 * 60 * 1000));
+            notifs.push({
+                key: `stuck-${c.id}`,
+                icon: 'fa-hourglass-half',
+                color: 'text-amber-500 bg-amber-100 dark:bg-amber-900/30',
+                title: `Stuck for ${daysStuck} days`,
+                desc: `${c.name} — ${c.stage}`,
+                action: () => { showSection('candidates'); },
+                category: 'Attention Needed'
+            });
+        }
+    });
+
+    // 3. Overdue Tasks
+    cachedTasks.forEach(t => {
+        if ((t.status || 'todo').toLowerCase() === 'done') return;
+        if (!t.dueDate) return;
+        const due = new Date(t.dueDate);
+        if (due < new Date(todayStr)) {
+            notifs.push({
+                key: `task-overdue-${t.id}`,
+                icon: 'fa-clock',
+                color: 'text-red-500 bg-red-100 dark:bg-red-900/30',
+                title: 'Overdue task',
+                desc: t.title,
+                action: () => showSection('tasks'),
+                category: 'Overdue Tasks'
+            });
+        }
+    });
+
+    // 4. New Applications Today
+    const newApps = cachedCandidates.filter(c => {
+        if (c.stage !== 'Applied') return false;
+        const ts = c.createdAt;
+        if (!ts) return false;
+        const d = new Date(ts.seconds ? ts.seconds * 1000 : ts);
+        return d.toISOString().split('T')[0] === todayStr;
+    });
+    if (newApps.length > 0) {
+        notifs.push({
+            key: `new-apps-${todayStr}`,
+            icon: 'fa-inbox',
+            color: 'text-blue-500 bg-blue-100 dark:bg-blue-900/30',
+            title: `${newApps.length} new application${newApps.length > 1 ? 's' : ''} today`,
+            desc: newApps.slice(0, 3).map(c => c.name).join(', ') + (newApps.length > 3 ? '...' : ''),
+            action: () => showSection('talentpool'),
+            category: 'New Applications'
+        });
+    }
+
+    // 5. Offers Pending Response
+    const pendingOffers = cachedOffers.filter(o => !o.status || o.status === 'Pending' || o.status === 'Sent');
+    if (pendingOffers.length > 0) {
+        notifs.push({
+            key: `offers-pending-${todayStr}`,
+            icon: 'fa-signature',
+            color: 'text-emerald-500 bg-emerald-100 dark:bg-emerald-900/30',
+            title: `${pendingOffers.length} offer${pendingOffers.length > 1 ? 's' : ''} awaiting response`,
+            desc: 'Review in Offer Management',
+            action: () => showSection('offers'),
+            category: 'Pending Offers'
+        });
+    }
+
+    return notifs;
+}
+
+function refreshNotificationBadge() {
+    const notifs = computeNotifications();
+    const unread = notifs.filter(n => !dismissedNotifKeys.includes(n.key));
+    const badge = document.getElementById('notif-badge');
+    if (badge) {
+        if (unread.length > 0) {
+            badge.innerText = unread.length > 99 ? '99+' : unread.length;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+    }
+}
+
+function renderNotifications() {
+    const container = document.getElementById('notification-items');
+    if (!container) return;
+
+    const notifs = computeNotifications();
+    const unread = notifs.filter(n => !dismissedNotifKeys.includes(n.key));
+
+    if (notifs.length === 0) {
+        container.innerHTML = `
+            <div class="flex flex-col items-center justify-center py-12 text-slate-400">
+                <i class="fas fa-bell-slash text-3xl mb-3 opacity-20"></i>
+                <p class="text-sm">All clear — no notifications!</p>
+            </div>`;
+        return;
+    }
+
+    // Group by category
+    const groups = {};
+    notifs.forEach(n => {
+        if (!groups[n.category]) groups[n.category] = [];
+        groups[n.category].push(n);
+    });
+
+    let html = '';
+    Object.keys(groups).forEach(category => {
+        html += `<div class="px-4 pt-3 pb-1">
+            <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400">${category}</p>
+        </div>`;
+        groups[category].forEach(n => {
+            const isRead = dismissedNotifKeys.includes(n.key);
+            html += `
+            <div class="flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${isRead ? 'opacity-50' : ''}"
+                 onclick="handleNotifClick('${n.key}', ${groups[category].indexOf(n)}, '${n.category}')">
+                <div class="w-9 h-9 rounded-xl ${n.color} flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <i class="fas ${n.icon} text-sm"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-semibold ${isRead ? '' : ''}" style="color: var(--text-primary)">${n.title}</p>
+                    <p class="text-xs truncate" style="color: var(--text-muted)">${n.desc}</p>
+                </div>
+                ${!isRead ? '<div class="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 mt-2"></div>' : ''}
+            </div>`;
+        });
+    });
+
+    container.innerHTML = html;
+}
+
+// Store computed notifications globally so click handler can reference them
+let _cachedNotifs = [];
+
+window.handleNotifClick = (key, index, category) => {
+    // Find and execute the notification action
+    const notifs = computeNotifications();
+    const notif = notifs.find(n => n.key === key);
+    if (notif && notif.action) {
+        // Mark as read
+        if (!dismissedNotifKeys.includes(key)) {
+            dismissedNotifKeys.push(key);
+            localStorage.setItem('dismissedNotifs', JSON.stringify(dismissedNotifKeys));
+        }
+        // Close panel
+        document.getElementById('notification-panel').classList.add('hidden');
+        // Navigate
+        notif.action();
+        refreshNotificationBadge();
+    }
+};
+
+window.toggleNotifications = (e) => {
+    e.stopPropagation();
+    const panel = document.getElementById('notification-panel');
+    const isHidden = panel.classList.contains('hidden');
+    // Close profile menu if open
+    const profileMenu = document.getElementById('profile-menu');
+    if (profileMenu) profileMenu.classList.remove('show');
+    if (isHidden) {
+        renderNotifications();
+        panel.classList.remove('hidden');
+    } else {
+        panel.classList.add('hidden');
+    }
+};
+
+window.markAllNotificationsRead = () => {
+    const notifs = computeNotifications();
+    notifs.forEach(n => {
+        if (!dismissedNotifKeys.includes(n.key)) {
+            dismissedNotifKeys.push(n.key);
+        }
+    });
+    // Keep only last 200 keys to prevent localStorage bloat
+    if (dismissedNotifKeys.length > 200) {
+        dismissedNotifKeys = dismissedNotifKeys.slice(-200);
+    }
+    localStorage.setItem('dismissedNotifs', JSON.stringify(dismissedNotifKeys));
+    refreshNotificationBadge();
+    renderNotifications();
+};
+
+// Close notification panel on outside click
+window.addEventListener('click', (e) => {
+    const panel = document.getElementById('notification-panel');
+    const wrapper = document.getElementById('notification-wrapper');
+    if (panel && wrapper && !wrapper.contains(e.target) && !panel.classList.contains('hidden')) {
+        panel.classList.add('hidden');
     }
 });

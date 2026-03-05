@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Candidate Profile — Recruitment Suite HR</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #f0f4ff 0%, #e8edf8 100%);
+            min-height: 100vh;
+            color: #1e293b;
+        }
+
+        .page-wrap {
+            max-width: 860px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+        }
+
+        /* ── Header bar ── */
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+            font-size: .85rem;
+            font-weight: 700;
+            color: #3b82f6;
+        }
+
+        .btn-print {
+            display: flex;
+            align-items: center;
+            gap: .4rem;
+            padding: .5rem 1.1rem;
+            border-radius: .75rem;
+            border: 1px solid #cbd5e1;
+            background: #fff;
+            font-size: .8rem;
+            font-weight: 600;
+            color: #475569;
+            cursor: pointer;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, .06);
+            transition: background .15s;
+        }
+
+        .btn-print:hover {
+            background: #f8fafc;
+        }
+
+        /* ── Card ── */
+        .card {
+            background: #fff;
+            border-radius: 1.25rem;
+            box-shadow: 0 16px 48px -12px rgba(0, 0, 0, .12), 0 0 0 1px rgba(0, 0, 0, .03);
+            overflow: hidden;
+        }
+
+        /* ── Gradient header ── */
+        .card-header {
+            background: linear-gradient(135deg, #3b82f6, #6366f1);
+            padding: 2rem 2.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card-header::before {
+            content: '';
+            position: absolute;
+            top: -3rem;
+            right: -3rem;
+            width: 10rem;
+            height: 10rem;
+            background: rgba(255, 255, 255, .1);
+            border-radius: 50%;
+            filter: blur(20px);
+        }
+
+        .header-inner {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .avatar {
+            width: 5rem;
+            height: 5rem;
+            border-radius: 1rem;
+            background: rgba(255, 255, 255, .2);
+            border: 2px solid rgba(255, 255, 255, .35);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-weight: 800;
+            color: #fff;
+            flex-shrink: 0;
+        }
+
+        .header-name {
+            font-size: 1.75rem;
+            font-weight: 800;
+            color: #fff;
+            line-height: 1.2;
+        }
+
+        .header-job {
+            color: #bfdbfe;
+            font-size: .95rem;
+            margin-top: .25rem;
+        }
+
+        .stage-badge {
+            display: inline-block;
+            margin-top: .6rem;
+            padding: .3rem .9rem;
+            border-radius: 999px;
+            font-size: .7rem;
+            font-weight: 700;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            background: rgba(255, 255, 255, .2);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, .3);
+        }
+
+        /* ── Body ── */
+        .card-body {
+            padding: 2rem 2.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        /* ── Section ── */
+        .section-title {
+            font-size: .68rem;
+            font-weight: 700;
+            letter-spacing: .1em;
+            text-transform: uppercase;
+            color: #94a3b8;
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+            margin-bottom: .75rem;
+            padding-bottom: .5rem;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .section-title i {
+            font-size: .8rem;
+        }
+
+        /* ── Grid of data pills ── */
+        .data-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: .75rem;
+        }
+
+        .data-pill {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: .75rem;
+            padding: .75rem 1rem;
+        }
+
+        .data-pill .lbl {
+            font-size: .65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            color: #94a3b8;
+        }
+
+        .data-pill .val {
+            font-size: .9rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin-top: .15rem;
+            word-break: break-word;
+        }
+
+        .data-pill .val.accent-blue {
+            color: #2563eb;
+        }
+
+        .data-pill .val.accent-green {
+            color: #16a34a;
+        }
+
+        .data-pill .val.accent-orange {
+            color: #d97706;
+        }
+
+        /* ── Notice big row ── */
+        .notes-box {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: .75rem;
+            padding: 1rem 1.25rem;
+            font-size: .875rem;
+            color: #475569;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        /* ── Resume preview ── */
+        .resume-wrap {
+            border-radius: .75rem;
+            overflow: hidden;
+            border: 1px solid #e2e8f0;
+        }
+
+        .resume-wrap iframe {
+            width: 100%;
+            height: 640px;
+            display: block;
+            border: none;
+        }
+
+        .resume-fallback {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: .75rem;
+            padding: 3rem;
+            background: #f8fafc;
+            text-align: center;
+        }
+
+        .resume-fallback i {
+            font-size: 2.5rem;
+            color: #cbd5e1;
+        }
+
+        .resume-fallback p {
+            color: #94a3b8;
+            font-size: .875rem;
+        }
+
+        .btn-view-resume {
+            display: inline-flex;
+            align-items: center;
+            gap: .4rem;
+            padding: .65rem 1.4rem;
+            border-radius: .75rem;
+            background: #2563eb;
+            color: #fff;
+            font-size: .8rem;
+            font-weight: 700;
+            text-decoration: none;
+            transition: opacity .15s;
+        }
+
+        .btn-view-resume:hover {
+            opacity: .9;
+        }
+
+        /* ── Footer ── */
+        .card-footer {
+            background: #f8fafc;
+            border-top: 1px solid #f1f5f9;
+            text-align: center;
+            padding: .9rem;
+            font-size: .7rem;
+            color: #94a3b8;
+            font-weight: 500;
+        }
+
+        /* ── States ── */
+        .centered-state {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .state-icon {
+            font-size: 3rem;
+            opacity: .25;
+        }
+
+        .state-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #1e293b;
+        }
+
+        .state-sub {
+            font-size: .875rem;
+            color: #64748b;
+            max-width: 400px;
+        }
+
+        @media print {
+            body {
+                background: #fff;
+            }
+
+            .top-bar,
+            .card-footer,
+            .no-print {
+                display: none !important;
+            }
+
+            .card {
+                box-shadow: none;
+                border: 1px solid #e2e8f0;
+                border-radius: .5rem;
+            }
+
+            .resume-wrap iframe {
+                height: 900px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Loading -->
+    <div id="state-loading" class="centered-state">
+        <div
+            style="width:3rem;height:3rem;border:4px solid #dbeafe;border-top-color:#3b82f6;border-radius:50%;animation:spin 0.8s linear infinite;">
+        </div>
+        <p style="color:#64748b;font-weight:600;">Loading profile…</p>
+    </div>
+    <style>
+        @keyframes spin {
+            to {
+                transform: rotate(360deg)
+            }
+        }
+    </style>
+
+    <!-- Error -->
+    <div id="state-error" style="display:none;" class="centered-state">
+        <i class="fas fa-shield-halved state-icon" style="color:#ef4444;opacity:1;font-size:3.5rem;"></i>
+        <p class="state-title">Access Denied</p>
+        <p class="state-sub">This link is invalid, expired, or has been tampered with. Please request a new share link
+            from your HR contact.</p>
+    </div>
+
+    <!-- Profile -->
+    <div id="state-profile" style="display:none;">
+        <div class="page-wrap">
+            <!-- Top bar -->
+            <div class="top-bar no-print">
+                <div class="brand"><i class="fas fa-users-rays"></i> Recruitment Suite HR</div>
+                <button class="btn-print" onclick="window.print()"><i class="fas fa-print"></i> Print</button>
+            </div>
+
+            <!-- Card -->
+            <div class="card">
+                <!-- Header -->
+                <div class="card-header">
+                    <div class="header-inner">
+                        <div class="avatar" id="hdr-initial">?</div>
+                        <div>
+                            <div class="header-name" id="hdr-name">Candidate</div>
+                            <div class="header-job" id="hdr-job">Position</div>
+                            <span class="stage-badge" id="hdr-stage">Applied</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    <!-- Contact -->
+                    <div>
+                        <p class="section-title"><i class="fas fa-address-card" style="color:#3b82f6;"></i> Contact
+                            Information</p>
+                        <div class="data-grid" id="sec-contact"></div>
+                    </div>
+
+                    <!-- Professional -->
+                    <div>
+                        <p class="section-title"><i class="fas fa-briefcase" style="color:#6366f1;"></i> Professional
+                            Details</p>
+                        <div class="data-grid" id="sec-professional"></div>
+                    </div>
+
+                    <!-- Compensation -->
+                    <div>
+                        <p class="section-title"><i class="fas fa-indian-rupee-sign" style="color:#16a34a;"></i>
+                            Compensation</p>
+                        <div class="data-grid" id="sec-compensation"></div>
+                    </div>
+
+                    <!-- Notes -->
+                    <div id="wrap-notes" style="display:none;">
+                        <p class="section-title"><i class="fas fa-note-sticky" style="color:#d97706;"></i> Notes / Cover
+                            Letter</p>
+                        <div class="notes-box" id="sec-notes"></div>
+                    </div>
+
+                    <!-- Skills / Tags -->
+                    <div id="wrap-skills" style="display:none;">
+                        <p class="section-title"><i class="fas fa-tags" style="color:#0891b2;"></i> Skills & Tags</p>
+                        <div id="sec-skills" style="display:flex;flex-wrap:wrap;gap:.5rem;"></div>
+                    </div>
+
+                    <!-- Resume Preview -->
+                    <div id="wrap-resume" style="display:none;">
+                        <p class="section-title"><i class="fas fa-file-lines" style="color:#dc2626;"></i> Resume Preview
+                        </p>
+                        <div class="resume-wrap" id="sec-resume"></div>
+                    </div>
+                </div>
+
+                <div class="card-footer">
+                    Shared via <strong>Recruitment Suite HR</strong> &nbsp;•&nbsp; Read-only profile snapshot
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase (compat SDK) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script>
+        firebase.initializeApp({
+            apiKey: "AIzaSyDKuFUJyHUl5AIFSFHCg-4S_wadsha6Et4",
+            authDomain: "recruitment-suite-hr.firebaseapp.com",
+            projectId: "recruitment-suite-hr",
+            storageBucket: "recruitment-suite-hr.firebasestorage.app",
+            messagingSenderId: "1049067446272",
+            appId: "1:1049067446272:web:a0eb4e5a9fac1589a8f8e5",
+            measurementId: "G-87FVXXYEP7"
+        });
+        const db = firebase.firestore();
+
+        // ── Token verification (must match generateShareLink in script.js) ──
+        function _shareHash(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                const c = str.charCodeAt(i);
+                hash = ((hash << 5) - hash) + c;
+                hash |= 0;
+            }
+            return Math.abs(hash).toString(36);
+        }
+
+        // ── Helpers ──
+        function show(id) { document.getElementById(id).style.display = ''; }
+        function hide(id) { document.getElementById(id).style.display = 'none'; }
+        function pill(label, value, accentClass) {
+            if (value === undefined || value === null || value === '') return '';
+            return `<div class="data-pill"><div class="lbl">${label}</div><div class="val ${accentClass || ''}">${value}</div></div>`;
+        }
+        function fmt(n) { return Number(n || 0).toLocaleString('en-IN'); }
+
+        // ── Determine if URL is a PDF or image for inline preview ──
+        function isInlineViewable(url) {
+            if (!url) return false;
+            const lower = url.toLowerCase().split('?')[0];
+            return lower.endsWith('.pdf') ||
+                lower.endsWith('.jpg') || lower.endsWith('.jpeg') ||
+                lower.endsWith('.png') || lower.endsWith('.webp') ||
+                lower.includes('/raw/upload/') || // Cloudinary raw
+                lower.includes('application/pdf');
+        }
+
+        // ── Render ──
+        async function loadProfile() {
+            const params = new URLSearchParams(window.location.search);
+            const id = params.get('id');
+            const token = params.get('token');
+
+            if (!id || !token || token !== _shareHash(id + ':rshr2026')) {
+                hide('state-loading');
+                show('state-error');
+                return;
+            }
+
+            try {
+                const snap = await db.collection('candidates').doc(id).get();
+                if (!snap.exists) throw new Error('Not found');
+                const c = snap.data();
+
+                // ── Try to get job title ──
+                // jobId can be either a Firestore doc ID OR the job title string (mirrors main app: j.id === c.jobId || j.title === c.jobId)
+                let jobTitle = c.jobTitle || c.appliedFor || '';
+                const looksLikeDocId = (id) => /^[A-Za-z0-9]{15,25}$/.test(id || '');
+
+                if (!jobTitle && c.jobId) {
+                    try {
+                        // 1st: try as a Firestore document ID
+                        const jSnap = await db.collection('jobs').doc(c.jobId).get();
+                        if (jSnap.exists && jSnap.data().title) {
+                            jobTitle = jSnap.data().title;
+                        } else if (!looksLikeDocId(c.jobId)) {
+                            // 2nd: jobId looks like a human-readable title string — use directly
+                            jobTitle = c.jobId;
+                        } else {
+                            // 3rd: it IS a doc ID but doc not found — query by title field
+                            const q = await db.collection('jobs').where('title', '==', c.jobId).limit(1).get();
+                            if (!q.empty) jobTitle = q.docs[0].data().title || '';
+                        }
+                    } catch (_) {
+                        // Silently ignore, falls through to "Position not specified"
+                    }
+                }
+                if (!jobTitle) jobTitle = 'Position not specified';
+
+                // ── Header ──
+                document.getElementById('hdr-initial').innerText = (c.name || '?')[0].toUpperCase();
+                document.getElementById('hdr-name').innerText = c.name || 'Unknown';
+                document.getElementById('hdr-job').innerText = jobTitle;
+                document.getElementById('hdr-stage').innerText = c.stage || 'Applied';
+                document.title = `${c.name || 'Profile'} — Recruitment Suite HR`;
+
+                // ── Contact ──
+                document.getElementById('sec-contact').innerHTML =
+                    pill('Full Name', c.name) +
+                    pill('Email', c.email ? `<a href="mailto:${c.email}" style="color:inherit">${c.email}</a>` : '') +
+                    pill('Phone', c.phone ? `<a href="tel:${c.phone}" style="color:inherit">${c.phone}</a>` : '') +
+                    pill('Gender', c.gender) +
+                    pill('Address', c.address) +
+                    pill('City', c.city || c.location);
+
+                // ── Professional ──
+                document.getElementById('sec-professional').innerHTML =
+                    pill('Experience', c.experience ? `${c.experience} Yrs` : '') +
+                    pill('Qualification', c.qualification) +
+                    pill('Current Company', c.currentCompany) +
+                    pill('Designation', c.designation || c.currentDesignation) +
+                    pill('Skills', c.skills ? (Array.isArray(c.skills) ? c.skills.join(', ') : c.skills) : '') +
+                    pill('Source', c.source) +
+                    pill('Application Date', c.createdAt
+                        ? new Date(c.createdAt.seconds ? c.createdAt.seconds * 1000 : c.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                        : '');
+
+                // ── Compensation ──
+                document.getElementById('sec-compensation').innerHTML =
+                    pill('Current CTC', c.currentCTC ? `₹${fmt(c.currentCTC)}/mo` : '', 'accent-orange') +
+                    pill('Expected CTC', c.expectedCTC ? `₹${fmt(c.expectedCTC)}/mo` : '', 'accent-blue') +
+                    pill('Notice Period', c.noticePeriod ? `${c.noticePeriod} Days` : '');
+
+                // ── Notes / Cover Letter ──
+                const notes = c.notes || c.coverLetter || c.remarks || '';
+                if (notes) {
+                    document.getElementById('sec-notes').innerText = notes;
+                    show('wrap-notes');
+                }
+
+                // ── Skills pills ──
+                if (Array.isArray(c.tags) && c.tags.length) {
+                    document.getElementById('sec-skills').innerHTML = c.tags.map(t =>
+                        `<span style="padding:.3rem .8rem;background:#eff6ff;color:#1d4ed8;border-radius:999px;font-size:.75rem;font-weight:700;border:1px solid #dbeafe;">${t}</span>`
+                    ).join('');
+                    show('wrap-skills');
+                }
+
+                // ── Resume Preview ──
+                const resumeUrl = c.resumeUrl || c.cvUrl || c.fileUrl;
+                if (resumeUrl) {
+                    show('wrap-resume');
+                    const container = document.getElementById('sec-resume');
+                    if (isInlineViewable(resumeUrl)) {
+                        // For PDFs use Google Docs viewer as fallback for non-Chrome browsers
+                        const viewerSrc = resumeUrl.toLowerCase().endsWith('.pdf')
+                            ? `https://docs.google.com/gview?url=${encodeURIComponent(resumeUrl)}&embedded=true`
+                            : resumeUrl;
+                        container.innerHTML = `<iframe src="${viewerSrc}" allowfullscreen></iframe>
+                            <div class="no-print" style="padding:.75rem 1rem;border-top:1px solid #e2e8f0;background:#f8fafc;text-align:right;">
+                                <a class="btn-view-resume" href="${resumeUrl}" target="_blank" rel="noopener">
+                                    <i class="fas fa-external-link-alt"></i> Open in new tab
+                                </a>
+                            </div>`;
+                    } else {
+                        container.innerHTML = `
+                            <div class="resume-fallback">
+                                <i class="fas fa-file-lines"></i>
+                                <p>Preview not available for this file type.</p>
+                                <a class="btn-view-resume" href="${resumeUrl}" target="_blank" rel="noopener">
+                                    <i class="fas fa-download"></i> Download Resume
+                                </a>
+                            </div>`;
+                    }
+                }
+
+                hide('state-loading');
+                show('state-profile');
+
+            } catch (err) {
+                console.error('Share profile error:', err);
+                hide('state-loading');
+                show('state-error');
+            }
+        }
+
+        loadProfile();
+    </script>
+</body>
+
+</html>
