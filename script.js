@@ -865,7 +865,7 @@ function renderJobs() {
                         <button onclick="viewJobInbox('${j.id}')" class="flex-1 py-2 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm">Manage Responses</button>
                         <button onclick="viewJobPipeline(this)" data-jobid="${j.id}" data-jobtitle="${j.title}" class="flex-1 py-2 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-colors shadow-sm">View Pipeline</button>
                     </div>
-                </div >
+                </div>
             `;
     }).join('');
 }
@@ -879,7 +879,7 @@ function renderCompanies() {
         return;
     }
     container.innerHTML = filtered.map(c => `
-            < div class="glass-card p-0 rounded-2xl flex flex-col group overflow-hidden border border-slate-200 dark:border-slate-800 hover:border-blue-500/50 transition-all duration-300 shadow-sm hover:shadow-xl relative" >
+            <div class="glass-card p-0 rounded-2xl flex flex-col group overflow-hidden border border-slate-200 dark:border-slate-800 hover:border-blue-500/50 transition-all duration-300 shadow-sm hover:shadow-xl relative">
                     <div class="h-2 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
                     <div class="p-6">
                         <div class="flex justify-between items-start mb-4">
@@ -919,7 +919,7 @@ function renderCompanies() {
                             </div>` : ''}
                         </div>
                     </div>
-                </div >
+                </div>
             `).join('');
 }
 
@@ -997,8 +997,8 @@ function renderCandidates() {
 
     // quick empty state
     if (list.length === 0) {
-        tableBody.innerHTML = `< tr > <td colspan="7" class="p-6 text-center text-slate-500">No candidates found.</td></tr > `;
-        cardsContainer.innerHTML = `< div class="col-span-1 p-6 text-center text-slate-500" > No candidates found.</div > `;
+        tableBody.innerHTML = `<tr > <td colspan="7" class="p-6 text-center text-slate-500">No candidates found.</td></tr> `;
+        cardsContainer.innerHTML = `<div class="col-span-1 p-6 text-center text-slate-500" > No candidates found.</div> `;
         return;
     }
 
@@ -1113,7 +1113,7 @@ function renderCandidates() {
             else budgetStatus = { label: 'Over Budget', subText: diffText, color: 'badge badge-red' };
         }
         return `
-            < div class="glass-card p-4 rounded-xl" >
+            <div class="glass-card p-4 rounded-xl">
                     <div class="flex items-start justify-between">
                         <div class="flex items-center gap-3">
                             <div class="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-bold text-slate-700">${initials}</div>
@@ -1140,7 +1140,7 @@ function renderCandidates() {
                             ${budgetStatus.subText ? `<div class="text-[8px] font-bold text-slate-500 uppercase tracking-tight mt-0.5">${budgetStatus.subText}</div>` : ''}
                         </div>
                     </div>
-                </div >
+                </div>
             `;
     }).join('');
 
@@ -1186,7 +1186,7 @@ function renderInterviews() {
         if (status === 'Rejected' || status === 'Backed Out' || status === 'Not Interested') { borderClass = 'border-red-500'; badgeClass = 'badge badge-red'; }
 
         return `
-            < div class="glass-card p-6 rounded-xl border-l-4 ${borderClass} flex flex-col justify-between group" >
+            <div class="glass-card p-6 rounded-xl border-l-4 ${borderClass} flex flex-col justify-between group">
                 <div class="flex justify-between items-start">
                     <div>
                         <div class="flex items-center gap-3">
@@ -1202,7 +1202,7 @@ function renderInterviews() {
                         <button onclick="deleteDocById('interviews', '${i.id}')" class="text-slate-400 hover:text-red-500 p-2 opacity-0 group-hover:opacity-100 transition" title="Delete Interview"><i class="fas fa-trash"></i></button>
                     </div>
                 </div>
-                <!--Template Send Controls-- >
+                <!--Template Send Controls-->
             <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center transition-all">
                 <div class="flex-1 mr-4 relative">
                     <!-- We use no-custom-select here if we want native, or skip it to get shiny custom selects -->
@@ -1220,7 +1220,7 @@ function renderInterviews() {
                     </button>
                 </div>
             </div>
-            </div >
+            </div>
             `;
     }).join('');
 }
@@ -1470,7 +1470,7 @@ function renderUpcomingInterviews() {
         const dateStr = dt.toLocaleDateString([], { day: 'numeric', month: 'short' });
 
         return `
-            < div class="p-4 rounded-xl bg-white dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 hover:border-blue-500/30 transition-colors group" >
+            <div class="p-4 rounded-xl bg-white dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 hover:border-blue-500/30 transition-colors group">
                 <div class="flex justify-between items-start">
                     <div class="flex items-center gap-3">
                         <div class="flex flex-col items-center justify-center w-12 h-12 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-bold">
@@ -1487,7 +1487,7 @@ function renderUpcomingInterviews() {
                         <span class="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">${i.mode || 'Online'}</span>
                     </div>
                 </div>
-                    </div > `;
+            </div>`;
     }).join('');
 }
 
@@ -1503,14 +1503,14 @@ function renderDashboardTasks() {
         });
 
     if (pending.length === 0) {
-        container.innerHTML = `< div class="text-center py-8 text-slate-400 text-xs italic" > All caught up! No pending tasks.</div > `;
+        container.innerHTML = `<div class="text-center py-8 text-slate-400 text-xs italic" > All caught up! No pending tasks.</div>`;
         return;
     }
 
     container.innerHTML = pending.slice(0, 5).map(t => {
         const priorityClass = { 'Low': 'text-slate-400', 'Medium': 'text-blue-500', 'High': 'text-orange-500', 'Urgent': 'text-red-500' }[t.priority] || 'text-slate-400';
         return `
-            < div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/20 border border-slate-100 dark:border-slate-800 hover:border-blue-500/20 transition-all group" >
+            <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/20 border border-slate-100 dark:border-slate-800 hover:border-blue-500/20 transition-all group">
                 <div class="flex items-start gap-3">
                     <div class="mt-1"><i class="fas fa-circle ${priorityClass} text-[6px]"></i></div>
                     <div class="flex-1">
@@ -1521,7 +1521,7 @@ function renderDashboardTasks() {
                         </div>
                     </div>
                 </div>
-                </div > `;
+            </div>`;
     }).join('');
 }
 
