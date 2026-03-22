@@ -1394,12 +1394,7 @@ function updateDashboard() {
     const thEl = document.getElementById('stat-total-hires');
     if (thEl) thEl.innerText = hiredCount;
 
-    // Selection Rate (Conversion)
-    const conversionRate = totalCandidates > 0 ? Math.round((hiredCount / totalCandidates) * 100) : 0;
-    const crEl = document.getElementById('report-conversion-rate');
-    if (crEl) crEl.innerText = conversionRate + '%';
-
-    // Budget Adherence & Metrics
+    // Essential Metrics for Charts and Dashboard
     let withinBudgetCount = 0;
     let totalCandWithJob = 0;
     let ctcs = [];
@@ -1424,18 +1419,7 @@ function updateDashboard() {
     });
 
     const adherence = totalCandWithJob > 0 ? Math.round((withinBudgetCount / totalCandWithJob) * 100) : 100;
-    const baEl = document.getElementById('report-budget-adherence');
-    if (baEl) baEl.innerText = adherence + '%';
-
-    // report-avg-time-to-fill (MOCK)
-    const ttfEl = document.getElementById('report-avg-time-to-fill');
-    if (ttfEl) ttfEl.innerText = '18 Days';
-
-    // Top Sourcing Channel
     const sortedSources = Object.entries(sourceMap).sort((a, b) => b[1] - a[1]);
-    const tcEl = document.getElementById('report-top-channel');
-    if (tcEl) tcEl.innerText = sortedSources.length > 0 ? sortedSources[0][0] : 'N/A';
-
     // Statistics for legacy elements if they still exist
     const selectedCount = cachedCandidates.filter(c => c.stage === 'Selected' || c.stage === 'Hired').length;
     const selectionRate = totalCandidates > 0 ? Math.round((selectedCount / totalCandidates) * 100) : 0;
@@ -4591,9 +4575,14 @@ window.showCandidateProfile = (id) => {
                             <i class="fas fa-envelope text-blue-500 w-4"></i>
                             <span class="text-slate-700 dark:text-slate-300">${c.email}</span>
                         </div>
-                        <div class="flex items-center gap-3 text-sm">
-                            <i class="fas fa-phone text-emerald-500 w-4"></i>
-                            <span class="text-slate-700 dark:text-slate-300">${c.phone}</span>
+                        <div class="flex items-center justify-between text-sm">
+                            <div class="flex items-center gap-3">
+                                <i class="fas fa-phone text-emerald-500 w-4"></i>
+                                <span class="text-slate-700 dark:text-slate-300">${c.phone}</span>
+                            </div>
+                            <button onclick="initiateRemoteCall('${c.phone}', '${c.name.replace(/'/g, "\\'")}')" class="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-bold hover:bg-emerald-200 transition-colors flex items-center gap-1">
+                                <i class="fas fa-mobile-screen-button"></i> Call
+                            </button>
                         </div>
                         <div class="flex items-center gap-3 text-sm">
                             <i class="fas fa-map-marker-alt text-red-400 w-4"></i>
@@ -4656,6 +4645,32 @@ window.showCandidateProfile = (id) => {
                     </div>
                 </div>
             `;
+};
+
+window.initiateRemoteCall = async (phoneNumber, candidateName) => {
+    if (!currentUser) {
+        if (typeof showToast === 'function') showToast("Please log in first", "error");
+        else alert("Please log in first");
+        return;
+    }
+
+    try {
+        const callRef = doc(db, "remote_calls", currentUser.uid);
+        await setDoc(callRef, {
+            phoneNumber: phoneNumber,
+            candidateName: candidateName,
+            status: 'pending',
+            timestamp: serverTimestamp(),
+            uid: currentUser.uid,
+            email: currentUser.email
+        });
+        if (typeof showToast === 'function') showToast(`Calling ${candidateName}... Check your phone.`, "success");
+        else alert(`Calling ${candidateName}... Check your phone.`);
+    } catch (error) {
+        console.error("Error initiating remote call:", error);
+        if (typeof showToast === 'function') showToast("Failed to initiate call", "error");
+        else alert("Failed to initiate call");
+    }
 };
 
 window.showJobDetails = (id) => {

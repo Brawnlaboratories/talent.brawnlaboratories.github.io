@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Remote Dialer - Recruitment Suite</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#3b82f6">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background: #0f172a;
+            color: #f1f5f9;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .pulse-ring {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border: 2px solid #3b82f6;
+            border-radius: 50%;
+            opacity: 0;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(0.8); opacity: 0; }
+            50% { opacity: 0.5; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+        .dial-button {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(to bottom right, #3b82f6, #2563eb);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 30px rgba(59, 130, 246, 0.4);
+            margin: 0 auto;
+            position: relative;
+            z-index: 10;
+        }
+        .safe-bottom {
+            padding-bottom: env(safe-area-inset-bottom, 1rem);
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center p-6 text-center">
+
+    <!-- Auth Layer -->
+    <div id="auth-layer" class="fixed inset-0 z-50 bg-[#0f172a] flex items-center justify-center p-8">
+        <div class="w-full max-w-sm space-y-8 animate-fade-in">
+            <div class="mb-8 flex flex-col items-center">
+                <div class="w-20 h-20 bg-blue-600 rounded-3xl flex items-center justify-center text-white text-4xl shadow-2xl mb-4">
+                    <i class="fas fa-users-rays"></i>
+                </div>
+                <h1 class="text-2xl font-bold">Remote Dialer</h1>
+                <p class="text-slate-400 text-sm mt-2">Sign in to sync with your dashboard</p>
+            </div>
+            
+            <div class="space-y-4">
+                <input type="email" id="email" placeholder="Email" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white focus:ring-2 focus:ring-blue-500 outline-none">
+                <input type="password" id="password" placeholder="Password" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white focus:ring-2 focus:ring-blue-500 outline-none">
+                <button id="login-btn" class="w-full bg-blue-600 hover:bg-blue-700 p-4 rounded-xl font-bold text-white shadow-lg transition-all active:scale-95">Sign In</button>
+                <p id="error-msg" class="text-red-400 text-xs hidden"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div id="main-content" class="hidden w-full max-w-md space-y-12">
+        <header class="flex flex-col items-center space-y-2">
+            <div class="w-12 h-12 rounded-full bg-blue-600/20 text-blue-500 flex items-center justify-center mb-2">
+                <i class="fas fa-satellite-dish animate-pulse"></i>
+            </div>
+            <h2 class="text-xl font-bold" id="user-status">Connected</h2>
+            <p class="text-slate-500 text-xs uppercase tracking-widest font-black" id="user-email"></p>
+        </header>
+
+        <div class="glass-card rounded-[2.5rem] p-10 space-y-8 relative overflow-hidden">
+            <div class="absolute -top-10 -right-10 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl"></div>
+            <div class="absolute -bottom-10 -left-10 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl"></div>
+            
+            <div id="pending-state" class="space-y-6">
+                <p class="text-slate-400">Waiting for call request...</p>
+                <div class="relative w-24 h-24 mx-auto mt-8">
+                    <div class="pulse-ring"></div>
+                    <div class="pulse-ring" style="animation-delay: 0.5s"></div>
+                    <div class="w-24 h-24 rounded-full bg-slate-800 flex items-center justify-center text-slate-500 text-3xl">
+                        <i class="fas fa-phone-slash"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div id="calling-state" class="hidden space-y-6 animate-fade-in">
+                <div>
+                    <p class="text-blue-400 text-xs font-bold uppercase tracking-widest mb-1">Incoming Request</p>
+                    <h1 class="text-3xl font-black text-white" id="candidate-name">Candidate Name</h1>
+                    <p class="text-slate-400 mt-2 text-lg" id="candidate-phone">0000000000</p>
+                </div>
+
+                <div class="relative py-8">
+                    <div class="pulse-ring"></div>
+                    <div class="pulse-ring" style="animation-delay: 0.5s"></div>
+                    <div class="pulse-ring" style="animation-delay: 1s"></div>
+                    <div class="dial-button">
+                        <i class="fas fa-phone text-3xl text-white"></i>
+                    </div>
+                </div>
+
+                <p class="text-slate-500 text-sm animate-pulse">Automatically dialing...</p>
+            </div>
+        </div>
+
+        <div class="space-y-4">
+            <div class="p-4 bg-slate-800/50 rounded-2xl text-[10px] text-slate-500 uppercase tracking-widest font-bold flex items-center justify-center gap-2">
+                <i class="fas fa-lock text-emerald-500"></i> Secure PWA Connection
+            </div>
+            <button onclick="logout()" class="text-slate-500 hover:text-white text-xs font-bold transition-colors">Sign Out</button>
+        </div>
+    </div>
+
+    <footer class="fixed bottom-6 safe-bottom left-0 right-0 text-slate-600 text-[10px] font-black uppercase tracking-widest italic">
+        Om shree shyaam devay namah
+    </footer>
+
+    <script type="module">
+        import { auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, doc, onSnapshot, updateDoc, serverTimestamp } from "./firebase_config.js";
+
+        let currentCallId = null;
+
+        // PWA Registration
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').then(reg => {
+                    console.log('SW Registered');
+                }).catch(err => console.log('SW Fail', err));
+            });
+        }
+
+        // Notification Permission
+        document.addEventListener('click', () => {
+            if (Notification.permission === 'default') {
+                Notification.requestPermission();
+            }
+        }, { once: true });
+
+        // Auth Logic
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                document.getElementById('auth-layer').classList.add('hidden');
+                document.getElementById('main-content').classList.remove('hidden');
+                document.getElementById('user-email').innerText = user.email;
+                setupCallListener(user.uid);
+            } else {
+                document.getElementById('auth-layer').classList.remove('hidden');
+                document.getElementById('main-content').classList.add('hidden');
+            }
+        });
+
+        const loginBtn = document.getElementById('login-btn');
+        loginBtn.onclick = async () => {
+            const email = document.getElementById('email').value;
+            const pass = document.getElementById('password').value;
+            if (!email || !pass) return;
+            
+            loginBtn.innerText = 'Connecting...';
+            try {
+                await signInWithEmailAndPassword(auth, email, pass);
+            } catch (err) {
+                const errEl = document.getElementById('error-msg');
+                errEl.innerText = err.message;
+                errEl.classList.remove('hidden');
+                loginBtn.innerText = 'Sign In';
+            }
+        };
+
+        window.logout = () => signOut(auth);
+
+        function setupCallListener(uid) {
+            const docRef = doc(db, "remote_calls", uid);
+            onSnapshot(docRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    if (data.status === 'pending') {
+                        // Check if it's a new call (timestamp within last minute)
+                        const now = Date.now();
+                        const callTime = data.timestamp ? data.timestamp.toMillis() : now;
+                        
+                        if (now - callTime < 10000) { // 10 second window
+                            triggerCall(data);
+                        }
+                    }
+                }
+            });
+        }
+
+        async function triggerCall(data) {
+            // Update UI
+            document.getElementById('candidate-name').innerText = data.candidateName;
+            document.getElementById('candidate-phone').innerText = data.phoneNumber;
+            document.getElementById('pending-state').classList.add('hidden');
+            document.getElementById('calling-state').classList.remove('hidden');
+
+            // Show Notification if backgrounded
+            if (Notification.permission === 'granted' && document.visibilityState === 'hidden') {
+                const n = new Notification("Incoming Call Request", {
+                    body: `Call ${data.candidateName} at ${data.phoneNumber}`,
+                    icon: "icon-192.png",
+                    tag: "remote-call"
+                });
+                n.onclick = () => {
+                    window.focus();
+                    window.location.href = "tel:" + data.phoneNumber;
+                };
+            }
+
+            // Mark as dialed in Firestore
+            const docRef = doc(db, "remote_calls", auth.currentUser.uid);
+            await updateDoc(docRef, { status: 'dialed' });
+
+            // Trigger actual dialer
+            setTimeout(() => {
+                window.location.href = "tel:" + data.phoneNumber;
+                
+                // Reset UI after a delay
+                setTimeout(() => {
+                    document.getElementById('pending-state').classList.remove('hidden');
+                    document.getElementById('calling-state').classList.add('hidden');
+                }, 5000);
+            }, 1500);
+        }
+    </script>
+</body>
+</html>

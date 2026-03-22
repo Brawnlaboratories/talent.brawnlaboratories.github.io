@@ -1421,172 +1421,36 @@
                 </div>
 
                 <!-- REPORTS VIEW -->
-                <div id="section-reports" class="hidden space-y-8">
-                    <!-- Top Ribbon Metrics -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                        <!-- Report Card: Hiring Funnel -->
-                        <div class="glass-card p-6 rounded-3xl group hover:shadow-2xl transition-all duration-300">
-                            <div class="flex justify-between items-start mb-4">
-                                <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center text-blue-600">
-                                    <i class="fas fa-filter text-xl"></i>
-                                </div>
-                                <button onclick="openAdvancedReport()" class="text-[10px] font-bold text-blue-500 uppercase hover:underline">View All</button>
-                            </div>
-                            <h4 class="font-bold text-slate-800 dark:text-white mb-1">Conversion Rate</h4>
-                            <p class="text-xs text-slate-500 mb-4">Application to Hired ratio</p>
-                            <div class="flex items-end gap-2">
-                                <span class="text-2xl font-black text-slate-800 dark:text-white" id="report-conversion-rate">12.5%</span>
-                                <span class="text-[10px] font-bold text-emerald-500 mb-1"><i class="fas fa-caret-up"></i> 2.1%</span>
-                            </div>
-                        </div>
-
-                        <!-- Report Card: Time to Fill -->
-                        <div class="glass-card p-6 rounded-3xl group hover:shadow-2xl transition-all duration-300">
-                            <div class="flex justify-between items-start mb-4">
-                                <div class="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-2xl flex items-center justify-center text-orange-600">
-                                    <i class="fas fa-stopwatch text-xl"></i>
-                                </div>
-                                <span class="text-[9px] font-black text-orange-500 bg-orange-50 dark:bg-orange-900/40 px-2 py-0.5 rounded-full uppercase">Efficiency</span>
-                            </div>
-                            <h4 class="font-bold text-slate-800 dark:text-white mb-1">Avg Time to Fill</h4>
-                            <p class="text-xs text-slate-500 mb-4">Duration from MRF to Hired</p>
-                            <div class="flex items-end gap-2">
-                                <span class="text-2xl font-black text-slate-800 dark:text-white" id="report-avg-time-to-fill">18 Days</span>
-                                <span class="text-[10px] font-bold text-emerald-500 mb-1"><i class="fas fa-caret-down"></i> 3 Days</span>
-                            </div>
-                        </div>
-
-                        <!-- Report Card: Budget Utilization -->
-                        <div class="glass-card p-6 rounded-3xl group hover:shadow-2xl transition-all duration-300">
-                            <div class="flex justify-between items-start mb-4">
-                                <div class="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-2xl flex items-center justify-center text-emerald-600">
-                                    <i class="fas fa-wallet text-xl"></i>
-                                </div>
-                                <span class="text-[9px] font-black text-emerald-500 bg-emerald-50 dark:bg-emerald-900/40 px-2 py-0.5 rounded-full uppercase">Finance</span>
-                            </div>
-                            <h4 class="font-bold text-slate-800 dark:text-white mb-1">Budget Adherence</h4>
-                            <p class="text-xs text-slate-500 mb-4">Offered vs Budgeted CTC</p>
-                            <div class="flex items-end gap-2">
-                                <span class="text-2xl font-black text-slate-800 dark:text-white" id="report-budget-adherence">94.2%</span>
-                                <span class="text-[10px] font-bold text-slate-400 mb-1">Optimal</span>
-                            </div>
-                        </div>
-
-                        <!-- Report Card: Source Quality -->
-                        <div class="glass-card p-6 rounded-3xl group hover:shadow-2xl transition-all duration-300">
-                            <div class="flex justify-between items-start mb-4">
-                                <div class="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-2xl flex items-center justify-center text-purple-600">
-                                    <i class="fas fa-bullseye text-xl"></i>
-                                </div>
-                                <span class="text-[9px] font-black text-purple-500 bg-purple-50 dark:bg-purple-900/40 px-2 py-0.5 rounded-full uppercase">Source</span>
-                            </div>
-                            <h4 class="font-bold text-slate-800 dark:text-white mb-1">Top Sourcing Channel</h4>
-                            <p class="text-xs text-slate-500 mb-4">Based on hire quality</p>
-                            <div class="flex items-end gap-2">
-                                <span class="text-2xl font-black text-slate-800 dark:text-white" id="report-top-channel">LinkedIn</span>
-                                <span class="text-[10px] font-bold text-blue-500 mb-1">62% Hires</span>
-                            </div>
+                <div id="section-reports" class="space-y-6 hidden">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-2xl font-bold">Analytics & Reports</h2>
+                        <div class="flex gap-4">
+                            <button onclick="exportCandidatesCSV()"
+                                class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all">
+                                <i class="fas fa-download"></i>
+                                Export CSV
+                            </button>
                         </div>
                     </div>
-
-                    <!-- Analytics Section -->
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <!-- Pipeline Distribution (Charts) -->
-                        <div class="glass-card p-8 rounded-3xl lg:col-span-2 space-y-8">
-                            <div class="flex justify-between items-center">
-                                <div>
-                                    <h4 class="font-bold text-lg text-slate-800 dark:text-white">Hiring Analytics</h4>
-                                    <p class="text-sm text-slate-500">Pipeline and Sourcing Trends</p>
-                                </div>
-                                <div class="flex gap-2">
-                                    <button class="px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs font-bold ring-1 ring-slate-200 dark:ring-slate-700">Stage</button>
-                                    <button class="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-600/20">Source</button>
-                                </div>
-                            </div>
-                            
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                <div class="h-64 relative">
-                                    <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 text-center">Pipeline Stages</p>
-                                    <canvas id="stageChart"></canvas>
-                                </div>
-                                <div class="h-64 relative">
-                                    <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 text-center">Source Distribution</p>
-                                    <canvas id="sourceChart"></canvas>
-                                </div>
-                            </div>
-
-                            <div class="pt-8 border-t border-slate-100 dark:border-slate-800">
-                                <p class="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-6">Financial Trends (Budget vs Expected)</p>
-                                <div class="h-72">
-                                    <canvas id="budgetChart"></canvas>
-                                </div>
+                    <!-- Reports Content -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div class="glass-card p-6 rounded-xl">
+                            <h3 class="text-lg font-bold mb-4">Pipeline Distribution</h3>
+                            <div class="h-64">
+                                <canvas id="stageChart"></canvas>
                             </div>
                         </div>
-
-                        <!-- Hiring Funnel & Exports -->
-                        <div class="space-y-6">
-                            <!-- Manual Hiring Funnel -->
-                            <div class="glass-card p-8 rounded-3xl">
-                                <div class="flex justify-between items-center mb-6">
-                                    <h4 class="font-bold text-slate-800 dark:text-white">Hiring Funnel</h4>
-                                    <i class="fas fa-filter text-blue-500 opacity-50"></i>
-                                </div>
-                                <div id="hiring-funnel-chart" class="space-y-4">
-                                    <!-- Dynamic content from script.js renderHiringFunnel() -->
-                                    <div class="py-12 text-center text-slate-400">
-                                        <i class="fas fa-circle-notch fa-spin mb-2"></i>
-                                        <p class="text-xs uppercase font-bold tracking-widest">Calculating...</p>
-                                    </div>
-                                </div>
+                        <div class="glass-card p-6 rounded-xl">
+                            <h3 class="text-lg font-bold mb-4">Sourcing Channels</h3>
+                            <div class="h-64">
+                                <canvas id="sourceChart"></canvas>
                             </div>
-
-                        <!-- System-wide Exports -->
-                        <div class="glass-card p-8 rounded-3xl flex flex-col">
-                            <h4 class="font-bold text-lg text-slate-800 dark:text-white mb-6">Quick Exports</h4>
-                            <div class="space-y-4 flex-1">
-                                <button onclick="fetchCandidatesReport()" class="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-between group border border-transparent hover:border-blue-100">
-                                    <div class="flex items-center gap-4">
-                                        <div class="w-10 h-10 bg-white dark:bg-slate-700 rounded-xl flex items-center justify-center shadow-sm">
-                                            <i class="fas fa-user-glue text-blue-500"></i>
-                                        </div>
-                                        <div class="text-left">
-                                            <p class="font-bold text-sm">Candidates Master</p>
-                                            <p class="text-[10px] opacity-70 font-bold uppercase tracking-widest">Excel (XLSX)</p>
-                                        </div>
-                                    </div>
-                                    <i class="fas fa-chevron-right text-[10px] opacity-30 group-hover:opacity-100 group-hover:translate-x-1 transition-all"></i>
-                                </button>
-                                
-                                <button onclick="fetchJobsReport()" class="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-between group border border-transparent hover:border-blue-100">
-                                    <div class="flex items-center gap-4">
-                                        <div class="w-10 h-10 bg-white dark:bg-slate-700 rounded-xl flex items-center justify-center shadow-sm">
-                                            <i class="fas fa-briefcase text-emerald-500"></i>
-                                        </div>
-                                        <div class="text-left">
-                                            <p class="font-bold text-sm">Active Job Openings</p>
-                                            <p class="text-[10px] opacity-70 font-bold uppercase tracking-widest">PDF Export</p>
-                                        </div>
-                                    </div>
-                                    <i class="fas fa-chevron-right text-[10px] opacity-30 group-hover:opacity-100 group-hover:translate-x-1 transition-all"></i>
-                                </button>
-
-                                <button onclick="fetchInterviewsReport()" class="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-between group border border-transparent hover:border-blue-100">
-                                    <div class="flex items-center gap-4">
-                                        <div class="w-10 h-10 bg-white dark:bg-slate-700 rounded-xl flex items-center justify-center shadow-sm">
-                                            <i class="fas fa-calendar-alt text-orange-500"></i>
-                                        </div>
-                                        <div class="text-left">
-                                            <p class="font-bold text-sm">Interview History</p>
-                                            <p class="text-[10px] opacity-70 font-bold uppercase tracking-widest">Full Log</p>
-                                        </div>
-                                    </div>
-                                    <i class="fas fa-chevron-right text-[10px] opacity-30 group-hover:opacity-100 group-hover:translate-x-1 transition-all"></i>
-                                </button>
+                        </div>
+                        <div class="glass-card p-6 rounded-xl">
+                            <h3 class="text-lg font-bold mb-4">Budget Accuracy</h3>
+                            <div class="h-64">
+                                <canvas id="budgetChart"></canvas>
                             </div>
-
-                            <button onclick="openAdvancedReport()" class="w-full py-4 mt-6 bg-blue-600 text-white rounded-2xl font-bold shadow-xl shadow-blue-600/20 hover:bg-blue-700 transition-all flex items-center justify-center gap-2">
-                                <i class="fas fa-cog"></i> Advanced Report Builder
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -2446,6 +2310,95 @@
 
     <script type="module" src="script.js"></script>
     <script type="module" src="firebase_config.js"></script>
+
+    <!-- Main Reports Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <!-- Report Card: Hiring Funnel -->
+        <div class="glass-card p-6 rounded-3xl group hover:shadow-2xl transition-all duration-300">
+            <div class="flex justify-between items-start mb-4">
+                <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center text-blue-600">
+                    <i class="fas fa-filter text-xl"></i>
+                </div>
+                <button onclick="openAdvancedReport()" class="text-[10px] font-bold text-blue-500 uppercase hover:underline">View All</button>
+            </div>
+            <h4 class="font-bold text-slate-800 dark:text-white mb-1">Conversion Rate</h4>
+            <p class="text-xs text-slate-500 mb-4">Application to Hired ratio</p>
+            <div class="flex items-end gap-2">
+                <span class="text-2xl font-black text-slate-800 dark:text-white" id="report-conversion-rate">12.5%</span>
+                <span class="text-[10px] font-bold text-emerald-500 mb-1"><i class="fas fa-caret-up"></i> 2.1%</span>
+            </div>
+        </div>
+
+        <!-- Report Card: Time to Fill -->
+        <div class="glass-card p-6 rounded-3xl group hover:shadow-2xl transition-all duration-300">
+            <div class="flex justify-between items-start mb-4">
+                <div class="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-2xl flex items-center justify-center text-orange-600">
+                    <i class="fas fa-stopwatch text-xl"></i>
+                </div>
+                <span class="text-[9px] font-black text-orange-500 bg-orange-50 dark:bg-orange-900/40 px-2 py-0.5 rounded-full uppercase">Efficiency</span>
+            </div>
+            <h4 class="font-bold text-slate-800 dark:text-white mb-1">Avg Time to Fill</h4>
+            <p class="text-xs text-slate-500 mb-4">Duration from MRF to Hired</p>
+            <div class="flex items-end gap-2">
+                <span class="text-2xl font-black text-slate-800 dark:text-white" id="report-avg-time">18 Days</span>
+                <span class="text-[10px] font-bold text-emerald-500 mb-1"><i class="fas fa-caret-down"></i> 3 Days</span>
+            </div>
+        </div>
+
+        <!-- Report Card: Budget Utilization -->
+        <div class="glass-card p-6 rounded-3xl group hover:shadow-2xl transition-all duration-300">
+            <div class="flex justify-between items-start mb-4">
+                <div class="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-2xl flex items-center justify-center text-emerald-600">
+                    <i class="fas fa-wallet text-xl"></i>
+                </div>
+                <span class="text-[9px] font-black text-emerald-500 bg-emerald-50 dark:bg-emerald-900/40 px-2 py-0.5 rounded-full uppercase">Finance</span>
+            </div>
+            <h4 class="font-bold text-slate-800 dark:text-white mb-1">Budget Adherence</h4>
+            <p class="text-xs text-slate-500 mb-4">Offered vs Budgeted CTC</p>
+            <div class="flex items-end gap-2">
+                <span class="text-2xl font-black text-slate-800 dark:text-white" id="report-budget-util">94.2%</span>
+                <span class="text-[10px] font-bold text-slate-400 mb-1">Optimal</span>
+            </div>
+        </div>
+
+        <!-- Report Card: Source Quality -->
+        <div class="glass-card p-6 rounded-3xl group hover:shadow-2xl transition-all duration-300">
+            <div class="flex justify-between items-start mb-4">
+                <div class="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-2xl flex items-center justify-center text-purple-600">
+                    <i class="fas fa-bullseye text-xl"></i>
+                </div>
+                <span class="text-[9px] font-black text-purple-500 bg-purple-50 dark:bg-purple-900/40 px-2 py-0.5 rounded-full uppercase">Source</span>
+            </div>
+            <h4 class="font-bold text-slate-800 dark:text-white mb-1">Top Sourcing Channel</h4>
+            <p class="text-xs text-slate-500 mb-4">Based on hire quality</p>
+            <div class="flex items-end gap-2">
+                <span class="text-2xl font-black text-slate-800 dark:text-white" id="report-top-source">LinkedIn</span>
+                <span class="text-[10px] font-bold text-blue-500 mb-1">62% Hires</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Secondary Reports Section -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
+        <!-- Sourcing Mix Chart Placeholder -->
+        <div class="glass-card p-8 rounded-3xl lg:col-span-2">
+            <div class="flex justify-between items-center mb-8">
+                <div>
+                    <h4 class="font-bold text-lg text-slate-800 dark:text-white">Monthly Hiring Analytics</h4>
+                    <p class="text-sm text-slate-500">Trends across different stages</p>
+                </div>
+                <div class="flex gap-2">
+                    <button class="px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs font-bold">Month</button>
+                    <button class="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold">Quarter</button>
+                </div>
+            </div>
+            <div class="h-64 flex items-center justify-center text-slate-300 border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-2xl">
+                <div class="text-center">
+                    <i class="fas fa-chart-line text-4xl mb-4 opacity-20"></i>
+                    <p class="text-sm font-medium">Chart visualization initializing...</p>
+                </div>
+            </div>
+        </div>
 
 
     <!-- Floating Draggable Calculator -->
