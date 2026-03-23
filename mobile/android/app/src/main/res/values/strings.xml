@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Recruit Dialer</string>
+    <string name="title_activity_main">Recruit Dialer</string>
+    <string name="package_name">com.recruit.remotedialer</string>
+    <string name="custom_url_scheme">com.recruit.remotedialer</string>
+</resources>

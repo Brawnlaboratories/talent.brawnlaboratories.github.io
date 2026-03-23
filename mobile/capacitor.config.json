@@ -1,0 +1,6 @@
+{
+  "appId": "com.recruit.remotedialer",
+  "appName": "Recruit Dialer",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}
