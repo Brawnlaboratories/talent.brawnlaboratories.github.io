@@ -4298,15 +4298,15 @@ window.loadPortalSettings = async () => {
     try {
         const docSnap = await getDoc(doc(db, "settings", "publicPortal"));
         const data = {
-            companyPrompt: 'Join our team!',
             primaryColor: '#3b82f6',
             isLocked: false,
             logoUrl: '',
             backgroundUrl: '',
             fontFamily: 'Plus Jakarta Sans, sans-serif',
             companyName: 'Brawn Laboratories Ltd', // Default Brand Name
-            cloudinaryUrl: '',
-            cloudinaryPreset: '',
+            jobsDisplayMode: 'All',
+            selectedJobsList: [],
+            customCtaText: 'Apply Now',
             ...(docSnap.exists() ? docSnap.data() : {})
         };
 
@@ -4355,8 +4355,8 @@ window.loadPortalSettings = async () => {
                                     </div>
                                 </div>
                                 <div class="space-y-1.5">
-                                    <label for="portal-headline" class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Welcome Headline</label>
-                                    <input type="text" id="portal-headline" name="companyPrompt" value="${data.companyPrompt || 'Join our team!'}" class="theme-input" autocomplete="off">
+                                    <label for="portal-cta-text" class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Custom Apply CTA Text</label>
+                                    <input type="text" id="portal-cta-text" name="customCtaText" value="${data.customCtaText || 'Apply Now'}" placeholder="e.g. Join the Team" class="theme-input" autocomplete="off">
                                 </div>
                             </div>
 
@@ -4393,27 +4393,100 @@ window.loadPortalSettings = async () => {
                                     </div>
                                 </div>
 
-                                <!-- Cloudinary Config -->
-                                <div class="space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800 text-slate-400">
-                                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2"><i class="fas fa-cloud-upload-alt text-blue-500"></i> Cloudinary Integration</label>
-                                    <p class="text-[10px] mb-2 leading-relaxed">Configure where resumes are uploaded. If left blank, the system's hardcoded default Cloudinary account will be used.</p>
-                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        <div class="space-y-1.5">
-                                            <label for="portal-cloud-url" class="block text-[9px] font-bold uppercase tracking-widest">API Upload URL</label>
-                                            <input type="url" id="portal-cloud-url" name="cloudinaryUrl" value="${data.cloudinaryUrl || ''}" placeholder="https://api.cloudinary.com/v1_1/.../upload" class="theme-input text-xs" autocomplete="off">
-                                        </div>
-                                        <div class="space-y-1.5">
-                                            <label for="portal-cloud-preset" class="block text-[9px] font-bold uppercase tracking-widest">Upload Preset</label>
-                                            <input type="text" id="portal-cloud-preset" name="cloudinaryPreset" value="${data.cloudinaryPreset || ''}" placeholder="resume_uploads" class="theme-input text-xs" autocomplete="off">
-                                        </div>
-                                    </div>
-                                </div>
+                                <!-- Relocated below -->
 
-                            </div>
                             </div>
                         </div>
 
-                        <div class="pt-6 border-t border-slate-100 dark:border-slate-800">
+                        <!-- Jobs Display Configuration (Full Width) -->
+                        <div class="space-y-5 pt-8 mt-4 border-t border-slate-100 dark:border-slate-800">
+                            <div class="mb-2">
+                                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2"><i class="fas fa-filter text-blue-500"></i> Portal Job Filters</label>
+                                <p class="text-[10px] mt-1 text-slate-500 leading-relaxed">Control which jobs are visible on the candidate portal in detail.</p>
+                            </div>
+                            
+                            <div class="space-y-2 max-w-sm">
+                                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Visibility Rule</label>
+                                <select id="portal-jobs-mode" name="jobsDisplayMode" class="theme-input text-sm font-bold" onchange="
+                                    document.getElementById('portal-jobs-rules').classList.toggle('hidden', this.value !== 'Rules');
+                                    document.getElementById('portal-jobs-selection').classList.toggle('hidden', this.value !== 'Selected');
+                                ">
+                                    <option value="All" ${data.jobsDisplayMode === 'All' || !data.jobsDisplayMode ? 'selected' : ''}>Show All Active Jobs</option>
+                                    <option value="Rules" ${data.jobsDisplayMode === 'Rules' ? 'selected' : ''}>Filter by Department / Location</option>
+                                    <option value="Selected" ${data.jobsDisplayMode === 'Selected' ? 'selected' : ''}>Manually Select Specific Jobs</option>
+                                </select>
+                            </div>
+
+                            <!-- Rules Configuration -->
+                            <div id="portal-jobs-rules" class="space-y-4 p-5 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800 ${data.jobsDisplayMode === 'Rules' ? '' : 'hidden'}">
+                                <div>
+                                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Allowed Departments</label>
+                                    <div class="flex flex-wrap gap-2.5">
+                                        ${[...new Set(cachedJobs.filter(j => j.status === 'Open').map(j => j.department).filter(Boolean))].map(d => `
+                                            <label class="flex items-center gap-2 cursor-pointer text-xs bg-white dark:bg-slate-900 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm transition-all hover:border-blue-400 hover:shadow-md">
+                                                <input type="checkbox" name="jobsFilterDepts" value="${d}" ${data.jobsFilterDepts?.includes(d) ? 'checked' : ''} class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                                                <span class="text-slate-700 dark:text-slate-300 font-bold">${d}</span>
+                                            </label>
+                                        `).join('') || '<span class="text-xs text-slate-400 italic">No departments available</span>'}
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 pt-2">Allowed Locations</label>
+                                    <div class="flex flex-wrap gap-2.5">
+                                        ${[...new Set(cachedJobs.filter(j => j.status === 'Open').map(j => j.location).filter(Boolean))].map(l => `
+                                            <label class="flex items-center gap-2 cursor-pointer text-xs bg-white dark:bg-slate-900 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm transition-all hover:border-blue-400 hover:shadow-md">
+                                                <input type="checkbox" name="jobsFilterLocs" value="${l}" ${data.jobsFilterLocs?.includes(l) ? 'checked' : ''} class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                                                <span class="text-slate-700 dark:text-slate-300 font-bold">${l}</span>
+                                            </label>
+                                        `).join('') || '<span class="text-xs text-slate-400 italic">No locations available</span>'}
+                                    </div>
+                                </div>
+                                <p class="text-[9px] text-slate-500 pt-3 border-t border-slate-200 dark:border-slate-700 uppercase font-black tracking-wider">Note: Jobs must match selected departments AND locations. If empty, all are shown.</p>
+                            </div>
+
+                            <!-- Manual Selection (Enhanced) -->
+                            <div id="portal-jobs-selection" class="space-y-4 p-5 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800 ${data.jobsDisplayMode === 'Selected' ? '' : 'hidden'}">
+                                
+                                <div class="flex flex-col md:flex-row gap-4 mb-2">
+                                    <div class="flex-1 relative">
+                                        <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                                        <input type="text" id="manual-job-search" placeholder="Search by job title..." class="theme-input !pl-10 text-sm font-bold h-11" onkeyup="filterPortalManualJobs()">
+                                    </div>
+                                    <select id="manual-job-dept" class="theme-input text-sm md:w-56 font-bold h-11" onchange="filterPortalManualJobs()">
+                                        <option value="">All Departments</option>
+                                        ${[...new Set(cachedJobs.filter(j=>j.status==='Open').map(j=>j.department).filter(Boolean))].map(d=>`<option value="${d}">${d}</option>`).join('')}
+                                    </select>
+                                    <select id="manual-job-loc" class="theme-input text-sm md:w-56 font-bold h-11" onchange="filterPortalManualJobs()">
+                                        <option value="">All Locations</option>
+                                        ${[...new Set(cachedJobs.filter(j=>j.status==='Open').map(j=>j.location).filter(Boolean))].map(l=>`<option value="${l}">${l}</option>`).join('')}
+                                    </select>
+                                </div>
+                                
+                                <div class="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-700">
+                                    <label class="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-2 cursor-pointer hover:text-blue-600 transition-colors">
+                                        <input type="checkbox" id="manual-job-select-all" class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" onchange="toggleAllManualJobs(this.checked)">
+                                        Select All Visible Match
+                                    </label>
+                                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-white dark:bg-slate-900 px-3 py-1 rounded-full shadow-sm border border-slate-200 dark:border-slate-700" id="manual-job-count">Showing ${cachedJobs.filter(j=>j.status==='Open').length} jobs</span>
+                                </div>
+                                
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar" id="manual-jobs-list">
+                                    ${cachedJobs.filter(j => j.status === 'Open').map(j => `
+                                        <label class="manual-job-item flex items-start gap-3 py-2 cursor-pointer bg-white dark:bg-slate-900 p-3.5 rounded-xl transition-all border border-slate-200 dark:border-slate-700 shadow-sm hover:border-blue-400 group" data-title="${(j.title||'').toLowerCase()}" data-dept="${j.department||''}" data-loc="${j.location||''}">
+                                            <input type="checkbox" name="selectedJobsList" value="${j.id}" ${data.selectedJobsList?.includes(j.id) ? 'checked' : ''} class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 mt-0.5 transition-transform group-hover:scale-110" onchange="updateManualJobSelectAll()">
+                                            <div class="flex flex-col flex-1 min-w-0">
+                                                <span class="text-xs font-black text-slate-800 dark:text-slate-200 leading-tight truncate" title="${j.title}">${j.title}</span>
+                                                <span class="text-[9px] font-bold text-slate-500 uppercase mt-1.5 flex items-center gap-1.5 truncate"><i class="fas fa-layer-group text-slate-400 w-3 text-center"></i> ${j.department || 'General'}</span>
+                                                <span class="text-[9px] font-bold text-slate-500 uppercase mt-0.5 flex items-center gap-1.5 truncate"><i class="fas fa-location-dot text-slate-400 w-3 text-center"></i> ${j.location || 'Remote'}</span>
+                                            </div>
+                                        </label>
+                                    `).join('')}
+                                    ${cachedJobs.filter(j => j.status === 'Open').length === 0 ? '<p class="text-xs text-red-500 font-bold col-span-full">No active jobs found.</p>' : ''}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="pt-8 border-t border-slate-100 dark:border-slate-800">
                             <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-2xl font-bold shadow-xl shadow-blue-600/20 transition-all active:scale-[0.98] flex items-center justify-center gap-3">
                                 <i class="fas fa-save shadow-sm"></i>
                                 Save & Synchronize Public Portal
@@ -4422,22 +4495,82 @@ window.loadPortalSettings = async () => {
                     </div>
                 </form>`;
 
+        window.filterPortalManualJobs = () => {
+            const search = document.getElementById('manual-job-search').value.toLowerCase();
+            const dept = document.getElementById('manual-job-dept').value;
+            const loc = document.getElementById('manual-job-loc').value;
+            const items = document.querySelectorAll('.manual-job-item');
+            let count = 0;
+            
+            items.forEach(item => {
+                const iTitle = item.getAttribute('data-title');
+                const iDept = item.getAttribute('data-dept');
+                const iLoc = item.getAttribute('data-loc');
+                
+                const matchSearch = iTitle.includes(search);
+                const matchDept = !dept || iDept === dept;
+                const matchLoc = !loc || iLoc === loc;
+                
+                if (matchSearch && matchDept && matchLoc) {
+                    item.style.display = 'flex';
+                    count++;
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+            
+            const countEl = document.getElementById('manual-job-count');
+            if (countEl) countEl.innerText = `Showing ${count} jobs`;
+            window.updateManualJobSelectAll();
+        };
+
+        window.toggleAllManualJobs = (checked) => {
+            const items = document.querySelectorAll('.manual-job-item');
+            items.forEach(item => {
+                if (item.style.display !== 'none') {
+                    const cb = item.querySelector('input[type="checkbox"]');
+                    if(cb) cb.checked = checked;
+                }
+            });
+            window.updateManualJobSelectAll();
+        };
+
+        window.updateManualJobSelectAll = () => {
+            const items = document.querySelectorAll('.manual-job-item');
+            let allChecked = true;
+            let anyVisible = false;
+            items.forEach(item => {
+                if (item.style.display !== 'none') {
+                    anyVisible = true;
+                    const cb = item.querySelector('input[type="checkbox"]');
+                    if (cb && !cb.checked) allChecked = false;
+                }
+            });
+            const master = document.getElementById('manual-job-select-all');
+            if(master) {
+                master.checked = anyVisible && allChecked;
+            }
+        };
+
+        // Initialize state on render
+        setTimeout(() => { if (document.getElementById('manual-job-select-all')) window.updateManualJobSelectAll(); }, 50);
+
         document.getElementById('form-portal-settings').onsubmit = async (e) => {
             e.preventDefault();
             const fd = new FormData(e.target);
 
             const s = {
                 primaryColor: fd.get('primaryColor'),
-                companyPrompt: fd.get('companyPrompt'),
+                customCtaText: fd.get('customCtaText'),
                 // UX fields removed as per request
                 aboutCompany: fd.get('aboutCompany'),
                 supportEmail: fd.get('supportEmail'),
                 supportPhone: fd.get('supportPhone'),
                 socialLinkedin: fd.get('socialLinkedin'),
-                // Cloudinary Config
-                cloudinaryUrl: fd.get('cloudinaryUrl'),
-                cloudinaryPreset: fd.get('cloudinaryPreset'),
-                // Social links removed as per request
+                jobsDisplayMode: fd.get('jobsDisplayMode'),
+                jobsFilterDepts: fd.getAll('jobsFilterDepts'),
+                jobsFilterLocs: fd.getAll('jobsFilterLocs'),
+                selectedJobsList: fd.getAll('selectedJobsList'),
                 isLocked: e.target.querySelector('input[name="isLocked"]').checked,
                 updatedAt: serverTimestamp()
             };

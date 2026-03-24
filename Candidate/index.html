@@ -267,8 +267,7 @@
                 
                 <div class="glass-card rounded-3xl p-8 shadow-2xl border border-white/20">
                     <div class="text-center mb-8">
-                        <h2 id="portal-headline" class="text-3xl font-black text-slate-900 dark:text-white">Join Our Network</h2>
-                        <p class="text-slate-500 dark:text-slate-400 mt-2 text-sm">Sign in color create an account to get started.</p>
+                        <p class="text-slate-500 dark:text-slate-400 mt-2 text-sm">Sign in or create an account to get started.</p>
                     </div>
 
                     <!-- Registration Flow -->
@@ -760,13 +759,17 @@
         };
 
         // --- SETTINGS FLOW ---
-        const fetchPortalSettings = async () => {
+        const fetchPortalSettings = () => {
             try {
-                const docSnap = await getDoc(doc(db, "settings", "publicPortal"));
-                if (docSnap.exists()) {
-                    portalSettings = docSnap.data();
-                    applySettings();
-                }
+                onSnapshot(doc(db, "settings", "publicPortal"), (docSnap) => {
+                    if (docSnap.exists()) {
+                        portalSettings = docSnap.data();
+                        applySettings();
+                        if (currentUser !== undefined) {
+                            fetchJobs();
+                        }
+                    }
+                });
             } catch (err) {
                 console.error("Failed to fetch settings:", err);
             }
@@ -821,11 +824,7 @@
                 document.head.appendChild(style);
             }
 
-            // Headline & About
-            if (portalSettings.companyPrompt) {
-                const el = document.getElementById('portal-headline');
-                if (el) el.innerText = portalSettings.companyPrompt;
-            }
+            // About
             if (portalSettings.aboutCompany) {
                 const el = document.getElementById('portal-about');
                 if (el) el.innerHTML = portalSettings.aboutCompany.replace(/\n/g, '<br>');
@@ -1109,7 +1108,26 @@
         const fetchJobs = () => {
             const q = query(collection(db, "jobs"), where("status", "==", "Open"));
             onSnapshot(q, (snapshot) => {
-                openJobs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                let fetchedJobs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                if (portalSettings) {
+                    if (portalSettings.jobsDisplayMode === 'Selected' && portalSettings.selectedJobsList) {
+                        fetchedJobs = fetchedJobs.filter(j => portalSettings.selectedJobsList.includes(j.id));
+                    } else if (portalSettings.jobsDisplayMode === 'Rules') {
+                        const allowedDepts = portalSettings.jobsFilterDepts || [];
+                        const allowedLocs = portalSettings.jobsFilterLocs || [];
+                        
+                        if (allowedDepts.length > 0 || allowedLocs.length > 0) {
+                            fetchedJobs = fetchedJobs.filter(j => {
+                                const deptMatch = allowedDepts.length === 0 || allowedDepts.includes(j.department);
+                                const locMatch = allowedLocs.length === 0 || allowedLocs.includes(j.location);
+                                return deptMatch && locMatch;
+                            });
+                        }
+                    }
+                }
+                
+                openJobs = fetchedJobs;
                 populateFilterDropdowns();
                 renderJobs();
             });
@@ -1326,7 +1344,7 @@
             if (applied) {
                 container.innerHTML = `<button disabled class="btn-secondary px-6 cursor-not-allowed opacity-70"><i class="fas fa-check-circle text-emerald-500 mr-2"></i>Applied</button>`;
             } else {
-                container.innerHTML = `<button onclick="applyToJob('${job.id}'); showView('portal-view');" class="btn-primary px-6">Apply Now</button>`;
+                container.innerHTML = `<button onclick="applyToJob('${job.id}'); showView('portal-view');" class="btn-primary px-6">${portalSettings?.customCtaText || 'Apply Now'}</button>`;
             }
 
             window.showView('job-details-view');
@@ -1365,7 +1383,7 @@
                 const applied = myApplications.find(a => a.jobId === job.id);
                 const btnHtml = applied 
                     ? `<button disabled class="btn-secondary w-full cursor-not-allowed opacity-70"><i class="fas fa-check-circle text-emerald-500"></i> Applied</button>`
-                    : `<button onclick="applyToJob('${job.id}')" class="btn-primary w-full">Apply Now</button>`;
+                    : `<button onclick="applyToJob('${job.id}')" class="btn-primary w-full">${portalSettings?.customCtaText || 'Apply Now'}</button>`;
 
                 return `
                     <div class="glass-card p-6 rounded-3xl flex flex-col justify-between group hover:shadow-2xl hover:shadow-blue-500/10 transition-all duration-300 border-b-4 border-b-transparent hover:border-b-blue-600">
