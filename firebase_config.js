@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebas
 import {
     getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getFirestore, collection, addDoc, getDocs, getDoc, doc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, setDoc, query, where, orderBy, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { initializeFirestore } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 // --- FIREBASE CONFIG ---
 const firebaseConfig = {
@@ -15,11 +15,14 @@ const firebaseConfig = {
     measurementId: "G-87FVXXYEP7"
 };
 
-
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+
+// --- INITIALIZE FIRESTORE ---
+export const db = initializeFirestore(app, {});
 
 export * from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 export * from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 export * from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+

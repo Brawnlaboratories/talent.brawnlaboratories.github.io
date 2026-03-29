@@ -27,13 +27,39 @@ window.filterOffersByStatus = (status) => {
     renderOffers();
 };
 let cachedWaTemplates = []; // added back
-let cachedTasks = []; // added back
+
 let cachedTalentPool = [];
 let whatsappSelectedCandidates = new Set();
 let globalSearchQuery = '';
 let candidateView = 'table'; // 'table' or 'cards'
+let currentArchiveTab = 'candidates'; // 'candidates' or 'jobs'
+
+window.switchArchiveTab = (tab) => {
+    currentArchiveTab = tab;
+    document.querySelectorAll('.archive-tab').forEach(btn => {
+        if (btn.id === `archive-tab-${tab}`) {
+            btn.classList.add('active', 'bg-white', 'dark:bg-blue-600', 'text-blue-600', 'dark:text-white', 'shadow-md');
+            btn.classList.remove('text-slate-500');
+        } else {
+            btn.classList.remove('active', 'bg-white', 'dark:bg-blue-600', 'text-blue-600', 'dark:text-white', 'shadow-md');
+            btn.classList.add('text-slate-500');
+        }
+    });
+    renderArchive();
+};
 // Track initial Firestore loads so loader stays visible until data is ready
 let pendingInitialLoads = 0;
+
+// --- OPTIMIZATION: BATCHED RENDERING ---
+let renderTimeout = null;
+function queueRender() {
+    if (renderTimeout) return;
+    renderTimeout = requestAnimationFrame(() => {
+        renderCurrentSection();
+        updateDashboard();
+        renderTimeout = null;
+    });
+}
 
 // --- SESSION TIMEOUT CONFIG ---
 const INACTIVITY_TIMEOUT = 45 * 60 * 1000; // 45 minutes
@@ -208,7 +234,6 @@ function renderCurrentSection() {
     renderCompanies();
     renderJobs();
     renderCandidates();
-    renderTasks();
     renderWaCandidatesChecklist();
     renderInterviews();
     if (typeof renderTalentPool === 'function') renderTalentPool();
@@ -399,7 +424,7 @@ if (resetBtn) {
         } catch (err) {
             resetError.innerText = getFriendlyErrorMessage(err.message);
             resetError.classList.remove('hidden');
-        
+
             resetBtn.innerText = orig;
             resetBtn.disabled = false;
         }
@@ -411,7 +436,7 @@ if (resetBtn) {
 onAuthStateChanged(auth, async (user) => {
     if (user && !user.isAnonymous) {
         // AUTHORIZATION CHECK
-        const allowedEmails = ['hrd@brawnlabs.in', 'talentacq@brawnlabs.in'];
+        const allowedEmails = ['hrd@brawnlabs.in', 'talentacq@brawnlabs.in', 'chandansingh22004@gmail.com'];
         if (!user.email || !allowedEmails.includes(user.email.toLowerCase())) {
             alert('Access Denied. Only authorized HR personnel can access this dashboard.');
             await auth.signOut();
@@ -462,10 +487,20 @@ onAuthStateChanged(auth, async (user) => {
 // --- CORE DATA FUNCTIONS ---
 async function initApp() {
     // When app starts after login, show loader until first data snapshots arrive
-    pendingInitialLoads = 7; // companies, jobs, candidates, interviews, offers, waTemplates, tasks
+    pendingInitialLoads = 6; // companies, jobs, candidates, interviews, offers, waTemplates
     showLoader();
     setupRealtimeListeners();
     showSection('dashboard');
+
+    // Safety Fallback: Hide loader after 5 seconds even if some snapshots fail to load
+    // This prevents being stuck at 'Signing in...' in case of persistence errors
+    setTimeout(() => {
+        if (pendingInitialLoads > 0) {
+            console.warn(`Boot Resilience: Hiding loader despite ${pendingInitialLoads} pending snapshots.`);
+            pendingInitialLoads = 0;
+            hideLoader();
+        }
+    }, 5000);
 }
 
 function setupRealtimeListeners() {
@@ -477,14 +512,18 @@ function setupRealtimeListeners() {
         }
     };
 
+    const logSource = (collectionName, snapshot) => {
+        const source = snapshot.metadata.fromCache ? "local cache" : "server";
+        console.log(`[Firestore] ${collectionName} loaded from ${source} (${snapshot.size} docs)`);
+    };
+
     // Listen for Companies
     const compQuery = collection(db, "companies");
     onSnapshot(compQuery, (snapshot) => {
+        logSource("Companies", snapshot);
         cachedCompanies = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        renderCompanies();
-        renderJobs();
-        renderCandidates();
         updateDropdowns();
+        queueRender();
         if (pendingInitialLoads > 0) {
             pendingInitialLoads--;
             if (pendingInitialLoads === 0) hideLoader();
@@ -494,13 +533,11 @@ function setupRealtimeListeners() {
     // Listen for Jobs
     const jobsQuery = collection(db, "jobs");
     onSnapshot(jobsQuery, (snapshot) => {
+        logSource("Jobs", snapshot);
         cachedJobs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        renderJobs();
-        renderCandidates();
-        renderInterviews();
         updateDropdowns();
-        updateDashboard();
         if (typeof renderTalentPool === 'function') renderTalentPool();
+        queueRender();
         if (pendingInitialLoads > 0) {
             pendingInitialLoads--;
             if (pendingInitialLoads === 0) hideLoader();
@@ -510,16 +547,13 @@ function setupRealtimeListeners() {
     // Listen for Candidates (Unified)
     const candidateQuery = collection(db, "candidates");
     onSnapshot(candidateQuery, (snapshot) => {
+        logSource("Candidates", snapshot);
         cachedCandidates = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-        // Populate cachedTalentPool by filtering cachedCandidates
         cachedTalentPool = cachedCandidates.filter(c => c.inTalentPool);
 
-        renderCandidates();
-        updateDashboard();
-        updateDropdowns();
         if (typeof renderTalentPool === 'function') renderTalentPool();
         if (typeof updateTalentPoolBadge === 'function') updateTalentPoolBadge();
+        queueRender();
         if (pendingInitialLoads > 0) {
             pendingInitialLoads--;
             if (pendingInitialLoads === 0) hideLoader();
@@ -529,9 +563,13 @@ function setupRealtimeListeners() {
     // Listen for Interviews
     const interviewQuery = collection(db, "interviews");
     onSnapshot(interviewQuery, (snapshot) => {
+        logSource("Interviews", snapshot);
         cachedInterviews = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        renderInterviews();
-        updateDashboard();
+
+        // Auto-Cleanup: Delete interviews older than 14 days if Done/Rejected
+        autoCleanupOldInterviews();
+
+        queueRender();
         if (pendingInitialLoads > 0) {
             pendingInitialLoads--;
             if (pendingInitialLoads === 0) hideLoader();
@@ -541,9 +579,9 @@ function setupRealtimeListeners() {
     // Listen for Offers
     const offersQuery = query(collection(db, "offers"), orderBy("createdAt", "desc"));
     onSnapshot(offersQuery, (snapshot) => {
+        logSource("Offers", snapshot);
         cachedOffers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        renderOffers();
-        updateDashboard();
+        queueRender();
         if (pendingInitialLoads > 0) {
             pendingInitialLoads--;
             if (pendingInitialLoads === 0) hideLoader();
@@ -553,28 +591,15 @@ function setupRealtimeListeners() {
     // Listen for WhatsApp Templates
     const waQuery = collection(db, "whatsappTemplates");
     onSnapshot(waQuery, (snapshot) => {
+        logSource("WhatsApp Templates", snapshot);
         cachedWaTemplates = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        renderWaTemplates();
         updateWaDropdowns();
+        queueRender();
         if (pendingInitialLoads > 0) {
             pendingInitialLoads--;
             if (pendingInitialLoads === 0) hideLoader();
         }
     }, (error) => handleError("WhatsApp Templates", error));
-
-    // Listen for Tasks
-    const taskQuery = query(collection(db, "tasks"), orderBy("createdAt", "desc"));
-    onSnapshot(taskQuery, (snapshot) => {
-        cachedTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        if (document.getElementById('section-tasks') && !document.getElementById('section-tasks').classList.contains('hidden')) {
-            renderTasks();
-        }
-        updateDashboard();
-        if (pendingInitialLoads > 0) {
-            pendingInitialLoads--;
-            if (pendingInitialLoads === 0) hideLoader();
-        }
-    }, (error) => handleError("Tasks", error));
 }
 
 // --- WHATSAPP FUNCTIONS ---
@@ -617,7 +642,7 @@ window.filterTemplates = (query) => {
     const q = query.toLowerCase();
     const container = document.getElementById('wa-templates-list');
     const filtered = cachedWaTemplates.filter(t => t.name.toLowerCase().includes(q) || t.content.toLowerCase().includes(q));
-    
+
     if (filtered.length === 0) {
         container.innerHTML = `<div class="text-xs p-8 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl text-slate-400">No matching templates found</div>`;
         return;
@@ -645,10 +670,14 @@ function renderWaCandidatesChecklist() {
 
     // Scoped search filter for WA checklist
     const q = getEffectiveQuery('candidates');
+    const rejectedStages = ['REJECTED', 'Rejected', 'Backed Out', 'Not Interested'];
     let list = cachedCandidates.filter(c => {
+        // Exclude rejected/inactive from the messaging list to keep it clean
+        if (rejectedStages.includes(c.stage)) return false;
+
         if (!q) return true;
         const qn = q.toLowerCase();
-        return c.name.toLowerCase().includes(qn) || (c.phone && c.phone.replace(/[^0-9]/g, '').includes(qn.replace(/[^0-9]/g, '')));
+        return (c.name || '').toLowerCase().includes(qn) || (c.phone && c.phone.replace(/[^0-9]/g, '').includes(qn.replace(/[^0-9]/g, '')));
     });
 
     if (list.length === 0) {
@@ -742,7 +771,7 @@ window.previewSelectedTemplate = () => {
                 <span class="text-[8px] text-slate-400 block text-right mt-1">${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
             </div>
         `;
-        
+
         const nameEl = document.getElementById('preview-candidate-name');
         if (nameEl) nameEl.innerText = demoCandidate ? demoCandidate.name : 'Recipient Name';
     }
@@ -900,7 +929,10 @@ function renderJobs() {
     }
 
     let filtered = cachedJobs.filter(j => {
-        const matchStatus = statusFilter === 'all' || j.status === statusFilter;
+        // Default to Open if no status filter set, and exclude Closed from main list unless explicitly asked
+        const matchStatus = statusFilter === 'all' 
+            ? j.status !== 'Closed' 
+            : j.status === statusFilter;
         const matchPriority = priorityFilter === 'all' || j.priority === priorityFilter;
         const matchDept = deptFilter === 'all' || j.department === deptFilter;
         const matchDesig = desigFilter === 'all' || j.designation === desigFilter;
@@ -1124,6 +1156,13 @@ function renderCandidates() {
             // Talent Pool Filter - Exclude from main board
             if (c.inTalentPool) return false;
 
+            // Hired Filter - Exclude from main pipeline and move to Archive
+            if (c.stage === 'Hired') return false;
+
+            // Rejected / Inactive Filter - Move to Talent Pool Rejected section
+            const rejectedStages = ['REJECTED', 'Rejected', 'Backed Out', 'Not Interested'];
+            if (rejectedStages.includes(c.stage)) return false;
+
             return true;
         });
 
@@ -1303,71 +1342,287 @@ function renderCandidates() {
     try { initCustomSelects(); } catch (e) { console.warn('initCustomSelects after renderCandidates failed', e); }
 }
 
+function renderArchive() {
+    const container = document.getElementById('archive-list');
+    if (!container) return;
+
+    if (currentArchiveTab === 'candidates') {
+        renderArchivedCandidates(container);
+    } else {
+        renderArchivedJobs(container);
+    }
+}
+
+function renderArchivedCandidates(container) {
+    const list = cachedCandidates.filter(c => c.stage === 'Hired');
+    if (list.length === 0) {
+        container.innerHTML = `
+            <div class="col-span-full py-20 flex flex-col items-center justify-center text-slate-400 bg-slate-50/50 dark:bg-slate-900/20 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800">
+                <i class="fas fa-users text-4xl mb-4 opacity-20"></i>
+                <p class="font-medium">No successful placements yet</p>
+                <p class="text-xs mt-1">Candidates marked as "Hired" appear here.</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = list.map(c => {
+        const job = cachedJobs.find(j => j.id === c.jobId);
+        const initials = (c.name || '').split(' ').map(s => s[0]).join('').substring(0, 2).toUpperCase();
+        const hiredDate = c.hiredAt ? new Date(c.hiredAt.seconds * 1000).toLocaleDateString() : (c.updatedAt ? new Date(c.updatedAt.seconds * 1000).toLocaleDateString() : 'N/A');
+
+        return `
+            <div class="glass-card hover:bg-slate-50 dark:hover:bg-slate-800/40 p-3 rounded-xl border border-slate-200 dark:border-white/5 transition-all">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div class="flex items-center gap-3 flex-1 min-w-0">
+                        <div class="w-9 h-9 rounded-lg bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center text-amber-600 font-black text-xs shadow-inner shrink-0">
+                            ${initials}
+                        </div>
+                        <div class="min-w-0">
+                            <h3 class="font-bold text-slate-800 dark:text-white leading-tight truncate text-sm">${c.name}</h3>
+                            <p class="text-[9px] font-bold text-slate-400 uppercase tracking-tight truncate">${job ? job.title : 'Deleted Position'}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center gap-6 shrink-0">
+                        <div class="flex flex-col items-center">
+                            <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest">Hired</span>
+                            <span class="text-[10px] font-bold text-slate-600 dark:text-slate-200 mt-0.5">${hiredDate}</span>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest">CTC</span>
+                            <span class="text-[10px] font-bold text-emerald-600 mt-0.5">₹${c.offeredCTC ? parseInt(c.offeredCTC).toLocaleString() : 'TBD'}</span>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <button onclick="showCandidateProfile('${c.id}')" class="px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[9px] font-bold border border-slate-200 dark:border-slate-700 hover:bg-slate-100 transition-all flex items-center gap-1.5">
+                            <i class="fas fa-user-circle"></i>Profile
+                        </button>
+                        <button onclick="updateCandidateStage('${c.id}', 'Interview')" class="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-amber-500 hover:border-amber-400 border border-slate-200 dark:border-slate-700 transition-all" title="Restore back to Pipeline">
+                            <i class="fas fa-rotate-left text-[10px]"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderArchivedJobs(container) {
+    const list = cachedJobs.filter(j => j.status === 'Closed');
+    if (list.length === 0) {
+        container.innerHTML = `
+            <div class="col-span-full py-20 flex flex-col items-center justify-center text-slate-400 bg-slate-50/50 dark:bg-slate-900/20 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800">
+                <i class="fas fa-briefcase text-4xl mb-4 opacity-20"></i>
+                <p class="font-medium">No archived positions</p>
+                <p class="text-xs mt-1">Jobs marked as "Closed" will appear here automatically.</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = list.map(j => {
+        const candidatesForJob = cachedCandidates.filter(c => c.jobId === j.id);
+        const hiredCount = candidatesForJob.filter(c => c.stage === 'Hired').length;
+        
+        return `
+            <div class="glass-card hover:bg-slate-50 dark:hover:bg-slate-800/40 p-3 rounded-xl border border-slate-200 dark:border-white/5 transition-all">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div class="flex-1 min-w-0">
+                        <h3 class="font-bold text-slate-800 dark:text-white leading-tight truncate text-sm">${j.title}</h3>
+                        <p class="text-[9px] font-bold text-slate-400 uppercase tracking-widest truncate">${j.department || 'General'}</p>
+                    </div>
+
+                    <div class="flex items-center gap-6 shrink-0">
+                        <div class="flex flex-col items-center">
+                            <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest">Candidates</span>
+                            <span class="text-[10px] font-bold text-slate-700 dark:text-white mt-0.5">${candidatesForJob.length}</span>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest">Success</span>
+                            <span class="text-[10px] font-bold text-emerald-500 mt-0.5">${hiredCount}</span>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest">Status</span>
+                            <span class="text-[9px] font-black text-red-500/80 mt-0.5 underline decoration-dotted">CLOSED</span>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-2 shrink-0">
+                        <button onclick="editJob('${j.id}')" class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[9px] font-bold border border-slate-200 dark:border-slate-700 hover:bg-slate-200 transition-all flex items-center gap-2 whitespace-nowrap">
+                            <i class="fas fa-edit"></i> REOPEN
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function exportArchiveCSV() {
+    const list = cachedCandidates.filter(c => c.stage === 'Hired');
+    if (list.length === 0) { showToast("No archived candidates to export."); return; }
+
+    const rows = [];
+    const headers = ['Name', 'Email', 'Phone', 'Position', 'Hired Date', 'Monthly CTC', 'Annual CTC'];
+    rows.push(headers.join(','));
+
+    list.forEach(c => {
+        const job = cachedJobs.find(j => j.id === c.jobId);
+        const hiredDate = c.hiredAt ? new Date(c.hiredAt.seconds * 1000).toLocaleDateString() : 'N/A';
+        const monthly = c.offeredCTC || 0;
+        const annual = monthly * 12;
+
+        const vals = [
+            c.name || '',
+            c.email || '',
+            c.phone || '',
+            job ? job.title : '',
+            hiredDate,
+            monthly,
+            annual
+        ];
+        rows.push(vals.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(','));
+    });
+
+    const csv = rows.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'hired_archive_export.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+
 function renderInterviews() {
     const container = document.getElementById('interviews-list');
     const q = getEffectiveQuery('interviews');
     const qnorm = q ? q.toLowerCase() : '';
-    const filtered = cachedInterviews.filter(i => {
+
+    // 1. Filter interviews
+    let filtered = cachedInterviews.filter(i => {
         const cand = cachedCandidates.find(c => c.id === i.candidateId);
         if (!cand) return false;
         if (!qnorm) return true;
-        return cand.name.toLowerCase().includes(qnorm) || (i.interviewer && i.interviewer.toLowerCase().includes(qnorm)) || (cand.phone && cand.phone.replace(/[^0-9]/g, '').includes(qnorm.replace(/[^0-9]/g, '')));
+        const job = cachedJobs.find(j => j.id === cand.jobId);
+        return cand.name.toLowerCase().includes(qnorm) ||
+            (i.interviewer && i.interviewer.toLowerCase().includes(qnorm)) ||
+            (job && job.title.toLowerCase().includes(qnorm)) ||
+            (cand.phone && cand.phone.replace(/[^0-9]/g, '').includes(qnorm.replace(/[^0-9]/g, '')));
     });
 
     if (filtered.length === 0) {
-        container.innerHTML = '<div class="text-slate-400 p-4 col-span-2">No interviews matching search.</div>';
+        container.innerHTML = `
+            <div class="col-span-full py-20 flex flex-col items-center justify-center text-slate-400 bg-slate-50/50 dark:bg-slate-900/20 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800">
+                <i class="fa-solid fa-calendar-xmark text-4xl mb-4 opacity-20"></i>
+                <p class="font-medium">No interviews matching your search</p>
+            </div>`;
         return;
     }
 
-    container.innerHTML = filtered.map(i => {
-        const cand = cachedCandidates.find(c => c.id === i.candidateId);
-        const date = i.dateTime ? new Date(i.dateTime).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : 'TBD';
-        const status = i.status || 'Scheduled';
-        let borderClass = 'border-blue-500';
-        let badgeClass = 'badge badge-blue';
+    // 2. Sort by date Descending (Latest on top)
+    filtered.sort((a, b) => new Date(b.dateTime || 0) - new Date(a.dateTime || 0));
 
-        if (status === 'Done' || status === 'Interviewed') { borderClass = 'border-slate-300 dark:border-slate-500'; badgeClass = 'badge badge-gray'; }
-        if (status === 'Selected') { borderClass = 'border-green-500'; badgeClass = 'badge badge-green'; }
-        if (status === 'Rejected' || status === 'Backed Out' || status === 'Not Interested') { borderClass = 'border-red-500'; badgeClass = 'badge badge-red'; }
+    // 3. Group by date
+    const groups = {};
+    filtered.forEach(i => {
+        const dateKey = i.dateTime ? i.dateTime.split('T')[0] : 'TBD';
+        if (!groups[dateKey]) groups[dateKey] = [];
+        groups[dateKey].push(i);
+    });
 
-        return `
-            <div class="glass-card p-6 rounded-xl border-l-4 ${borderClass} flex flex-col justify-between group">
-                <div class="flex justify-between items-start">
-                    <div>
-                        <div class="flex items-center gap-3">
-                            <h4 class="font-bold text-xl text-slate-800 dark:text-white">${highlight(cand ? cand.name : 'Unknown Candidate', q)}</h4>
-                            <span class="text-[10px] px-2 py-0.5 rounded border uppercase font-bold tracking-wider ${badgeClass}">${status}</span>
+    // 4. Render
+    let html = '';
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+    Object.keys(groups).sort().reverse().forEach(dateKey => {
+        let label = dateKey;
+        if (dateKey === todayStr) label = "Today";
+        else if (dateKey === tomorrowStr) label = "Tomorrow";
+        else if (dateKey !== 'TBD') label = new Date(dateKey).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+
+        html += `<div class="date-divider"><span>${label}</span></div>`;
+
+        groups[dateKey].forEach(i => {
+            const cand = cachedCandidates.find(c => c.id === i.candidateId);
+            const job = cand ? cachedJobs.find(j => j.id === cand.jobId) : null;
+            const company = job ? cachedCompanies.find(co => co.id === job.companyId) : null;
+
+            const dt = i.dateTime ? new Date(i.dateTime) : null;
+            const time = dt ? dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'TBD';
+            const day = dt ? dt.getDate() : '--';
+            const month = dt ? dt.toLocaleString('default', { month: 'short' }) : '---';
+
+            const status = i.status || 'Scheduled';
+            let badgeClass = 'badge badge-blue';
+            if (['Done', 'Interviewed'].includes(status)) badgeClass = 'badge badge-gray';
+            if (status === 'Selected') badgeClass = 'badge badge-green';
+            if (['Rejected', 'Backed Out', 'Not Interested'].includes(status)) badgeClass = 'badge badge-red';
+
+            const isLive = dt && Math.abs(dt - now) < (30 * 60 * 1000) && status === 'Scheduled';
+
+            html += `
+                <div class="interview-row group">
+                    <div class="interview-date-col">
+                        <span class="date-day">${day}</span>
+                        <span class="date-month">${month}</span>
+                        <span class="text-[10px] font-bold text-slate-400 mt-1">${time}</span>
+                    </div>
+                    
+                    <div class="interview-main-col">
+                        <div class="flex items-center gap-3 mb-1">
+                            <h4 class="interview-candidate-name">${highlight(cand ? cand.name : 'Unknown', q)}</h4>
+                            <span class="${badgeClass}">${status}</span>
+                            ${isLive ? '<span class="indicator-live" title="Starting Soon / Live"></span>' : ''}
                         </div>
-                        <p class="text-sm mt-1.5 font-medium" style="color: var(--text-secondary)"><i class="far fa-clock mr-2 text-slate-400"></i>${date}</p>
-                        <p class="text-xs mt-1 lowercase font-bold tracking-tight" style="color: var(--text-muted)"><i class="fas ${i.mode && i.mode.includes('Video') ? 'fa-video text-blue-500' : 'fa-building text-orange-500'} mr-2"></i> ${i.mode || ''}</p>
-                        ${i.interviewer ? `<p class="text-[10px] mt-2 italic font-medium" style="color: var(--text-muted)"><i class="fas fa-user-circle mr-1"></i> Interviewer: ${i.interviewer}</p>` : ''}
+                        <div class="interview-job-info">
+                            <span class="text-blue-500"><i class="fas fa-briefcase"></i> ${job ? job.title : 'N/A'}</span>
+                            <span class="text-slate-300">•</span>
+                            <span><i class="fas fa-building text-slate-400"></i> ${company ? company.name : 'N/A'}</span>
+                        </div>
+                        <div class="mt-2 flex items-center gap-2">
+                             <span class="text-[9px] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded font-bold text-slate-500 uppercase tracking-tighter border border-slate-200 dark:border-slate-700">
+                                ${i.round || 'Initial Round'}
+                             </span>
+                        </div>
                     </div>
-                    <div class="flex flex-col gap-2">
-                        <button onclick="editInterview('${i.id}')" class="text-slate-400 hover:text-blue-500 p-2 opacity-0 group-hover:opacity-100 transition" title="Edit Interview"><i class="fas fa-edit"></i></button>
-                        <button onclick="deleteDocById('interviews', '${i.id}')" class="text-slate-400 hover:text-red-500 p-2 opacity-0 group-hover:opacity-100 transition" title="Delete Interview"><i class="fas fa-trash"></i></button>
+
+                    <div class="interview-meta-col flex flex-col gap-1 text-[11px]">
+                        <div class="flex items-center gap-2">
+                            <i class="fas fa-user-tie text-slate-400"></i>
+                            <span class="font-medium">${i.interviewer || 'TBD'}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <i class="fas ${i.mode && i.mode.includes('Video') ? 'fa-video text-blue-500' : 'fa-map-marker-alt text-orange-500'}"></i>
+                            <span class="${i.mode && i.mode.includes('Video') ? 'text-blue-600 dark:text-blue-400 font-bold' : ''}">${i.mode || 'Location TBD'}</span>
+                        </div>
+                    </div>
+
+                    <div class="interview-actions-col">
+                        ${i.meetingLink ? `
+                        <a href="${i.meetingLink}" target="_blank" class="btn-action-round text-emerald-500 hover:text-white" title="Join Meeting">
+                            <i class="fas fa-video"></i>
+                        </a>` : ''}
+                        
+                        <button onclick="previewResume('${cand ? cand.resumeUrl : ''}')" class="btn-action-round" title="View Resume">
+                            <i class="fas fa-file-pdf text-blue-500"></i>
+                        </button>
+                        
+                        <button onclick="editInterview('${i.id}')" class="btn-action-round hover:bg-slate-500" title="Manage & Feedback">
+                             <i class="fas fa-comment-dots"></i>
+                        </button>
+
+                        <button onclick="deleteDocById('interviews', '${i.id}')" class="btn-action-round hover:bg-red-500" title="Cancel/Delete">
+                             <i class="fas fa-times-circle text-red-400 group-hover:text-white"></i>
+                        </button>
                     </div>
                 </div>
-                <!--Template Send Controls-->
-            <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center transition-all">
-                <div class="flex-1 mr-4 relative">
-                    <!-- We use no-custom-select here if we want native, or skip it to get shiny custom selects -->
-                    <select id="template-select-${i.id}" class="theme-input text-xs py-1.5 px-2 rounded-lg w-full bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 no-custom-select" style="max-width: 180px;">
-                        <option value="">-- Choose Msg Template --</option>
-                        ${cachedWaTemplates.filter(t => t.type === 'Interview Reminder').map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
-                    </select>
-                </div>
-                <div class="flex gap-2 shrink-0">
-                    <button onclick="sendInterviewWhatsApp('${i.id}')" class="w-8 h-8 flex items-center justify-center bg-[#25D366] hover:bg-[#128C7E] text-white rounded-full shadow-sm shadow-[#25D366]/20 transition-colors" title="Send WhatsApp">
-                        <i class="fab fa-whatsapp text-sm"></i>
-                    </button>
-                    <button onclick="sendInterviewEmail('${i.id}')" class="w-8 h-8 flex items-center justify-center bg-slate-700 hover:bg-slate-800 dark:bg-slate-600 dark:hover:bg-slate-500 text-white rounded-full shadow-sm transition-colors" title="Send Email">
-                        <i class="fas fa-envelope text-sm"></i>
-                    </button>
-                </div>
-            </div>
-            </div>
             `;
-    }).join('');
+        });
+    });
+
+    container.innerHTML = html;
 }
 
 // --- DASHBOARD ANALYTICS ---
@@ -1385,10 +1640,7 @@ function updateDashboard() {
     const todayInts = cachedInterviews.filter(i => i.dateTime && i.dateTime.startsWith(todayStr)).length;
     document.getElementById('stat-today-interviews').innerText = todayInts;
 
-    // Pending Tasks
-    const pendingTasks = cachedTasks.filter(t => (t.status || 'todo').toLowerCase() !== 'done').length;
-    const ptEl = document.getElementById('stat-pending-tasks');
-    if (ptEl) ptEl.innerText = pendingTasks;
+
 
     // Talent Pool
     const talentPool = cachedCandidates.filter(c => c.stage !== 'Hired' && c.stage !== 'Rejected' && c.stage !== 'Backed Out' && c.stage !== 'Not Interested').length;
@@ -1456,13 +1708,15 @@ function updateDashboard() {
         if (c.stage !== 'Hired') return false;
         const timestamp = c.hiredAt || c.createdAt;
         if (!timestamp) return false;
-        const d = new Date(timestamp.seconds * 1000);
+        const d = (timestamp.seconds) ? new Date(timestamp.seconds * 1000) : new Date(timestamp);
         return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
     }).length;
-    const mhEl = document.getElementById('stat-monthly-hires');
+    const mhEl = document.getElementById('stat-monthly-hires-big');
     if (mhEl) mhEl.innerText = monthlyHires;
 
+
     // Interview Stats
+
     const upcomingInts = cachedInterviews.filter(i => i.dateTime && new Date(i.dateTime) >= now).length;
     const pendingFeedback = cachedInterviews.filter(i => (i.status === 'Interviewed' || i.status === 'Done') && !i.feedback).length;
     const completedToday = cachedInterviews.filter(i => {
@@ -1539,10 +1793,12 @@ function updateDashboard() {
             labels: recentJobs.map(j => j.title.length > 15 ? j.title.substring(0, 12) + '...' : j.title),
             datasets: [
                 { label: 'Budget', data: recentJobs.map(j => (j.budget || 0)), borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.1)', fill: true, tension: 0.4 },
-                { label: 'Avg Exp', data: recentJobs.map(j => {
-                    const cands = cachedCandidates.filter(c => c.jobId === j.id);
-                    return cands.length > 0 ? (cands.reduce((a, b) => a + Number(b.expectedCTC || 0), 0) / cands.length) * 12 : 0;
-                }), borderColor: '#ef4444', borderDash: [5, 5], tension: 0.4 }
+                {
+                    label: 'Avg Exp', data: recentJobs.map(j => {
+                        const cands = cachedCandidates.filter(c => c.jobId === j.id);
+                        return cands.length > 0 ? (cands.reduce((a, b) => a + Number(b.expectedCTC || 0), 0) / cands.length) * 12 : 0;
+                    }), borderColor: '#ef4444', borderDash: [5, 5], tension: 0.4
+                }
             ]
         },
         options: {
@@ -1554,7 +1810,7 @@ function updateDashboard() {
     });
 
     renderUpcomingInterviews();
-    renderDashboardTasks();
+
     renderDashboardOffers();
     renderHiringFunnel();
 
@@ -1572,9 +1828,6 @@ function updateDashboard() {
     const aeEl = document.getElementById('stat-avg-exp');
     if (aeEl) aeEl.innerText = avgExp;
 
-    const overdueTasks = cachedTasks.filter(t => (t.status || 'todo').toLowerCase() !== 'done' && t.dueDate && t.dueDate < now.toISOString().split('T')[0]).length;
-    const otEl = document.getElementById('stat-overdue-tasks');
-    if (otEl) otEl.innerText = overdueTasks;
 }
 
 // ── Pending Offers sidebar widget ──
@@ -1707,58 +1960,7 @@ function renderUpcomingInterviews() {
     }).join('');
 }
 
-function renderDashboardTasks() {
-    const container = document.getElementById('dashboard-tasks-list');
-    if (!container) return;
 
-    const pending = cachedTasks
-        .filter(t => (t.status || 'todo').toLowerCase() !== 'done')
-        .sort((a, b) => {
-            const priorities = { 'Urgent': 0, 'High': 1, 'Medium': 2, 'Low': 3 };
-            return priorities[a.priority] - priorities[b.priority];
-        });
-
-    if (pending.length === 0) {
-        container.innerHTML = `<div class="text-center py-8 text-slate-400 text-xs italic" > All caught up! No pending tasks.</div>`;
-        return;
-    }
-
-    container.innerHTML = pending.slice(0, 5).map((t, index) => {
-        const priorityClass = { 'Low': 'tag-low', 'Medium': 'tag-medium', 'High': 'tag-high', 'Urgent': 'tag-urgent' }[t.priority] || 'tag-low';
-        const subtasks = t.subtasks || [];
-        const doneSubtasks = subtasks.filter(s => s.done).length;
-        const progress = subtasks.length > 0 ? (doneSubtasks / subtasks.length) * 100 : 0;
-
-        const staggerClass = index < 5 ? `animate-fade-up stagger-${index + 1}` : '';
-
-        return `
-            <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/20 border border-slate-100 dark:border-slate-800 hover:border-orange-500/20 transition-all group hover-lift ${staggerClass}">
-                <div class="flex items-start gap-3">
-                    <div class="flex-1">
-                        <div class="flex justify-between items-start mb-1">
-                            <span class="tag-badge ${priorityClass}">${t.priority}</span>
-                            <span class="text-[9px] font-bold text-slate-400">Due: ${t.dueDate || 'N/A'}</span>
-                        </div>
-                        <p class="text-xs font-bold text-slate-700 dark:text-slate-200">${t.title}</p>
-                        ${subtasks.length > 0 ? `
-                        <div class="mt-2 space-y-1">
-                            <div class="flex justify-between items-center text-[8px] font-bold text-slate-400">
-                                <span>Checklist</span>
-                                <span>${doneSubtasks}/${subtasks.length}</span>
-                            </div>
-                            <div class="progress-bar-container" style="height: 2px;">
-                                <div class="progress-bar-fill" style="width: ${progress}%"></div>
-                            </div>
-                        </div>
-                        ` : ''}
-                        <div class="flex justify-end mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/50">
-                            <button onclick="moveTask('${t.id}', 'done')" class="text-[9px] font-bold text-blue-500 hover:underline opacity-0 group-hover:opacity-100 transition-opacity uppercase">Complete</button>
-                        </div>
-                    </div>
-                </div>
-            </div>`;
-    }).join('');
-}
 
 // --- FORMS & ACTIONS ---
 document.getElementById('form-company').onsubmit = async (e) => {
@@ -1797,8 +1999,14 @@ window.editCompany = (id) => {
     for (const key in current) {
         if (form.elements[key]) form.elements[key].value = current[key];
     }
+    
+    // Update Workspace UI
+    document.getElementById('comp-name-display').innerText = current.name || 'New Partner';
+    document.getElementById('comp-industry-display').innerText = current.industry || 'Sector Unassigned';
+    document.getElementById('comp-logo-display').innerHTML = current.name ? current.name.charAt(0).toUpperCase() : '<i class="fas fa-city"></i>';
+
     document.getElementById('form-company-id').value = id;
-    document.getElementById('modal-company-title').innerText = "Edit Company";
+    document.getElementById('modal-company-title').innerText = "Edit Company Profile";
     openModal('modal-company');
 };
 
@@ -1810,8 +2018,24 @@ document.getElementById('form-job').onsubmit = async (e) => {
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
 
-        // Keep budget numeric
-        data.budget = Number(data.budget);
+        // Keep budget numeric and convert LPA to Full INR for Firestore compatibility
+        data.budget = Number(data.budget) * 100000;
+
+        // Parse multi-line fields into arrays
+        if (data.requirements) {
+            data.requirements = data.requirements.split('\n').map(s => s.trim()).filter(s => s !== '');
+        } else {
+            data.requirements = [];
+        }
+
+        // keySkills (Recruit) -> skills (Candidate) compatibility
+        if (data.keySkills) {
+            data.keySkills = data.keySkills.split('\n').map(s => s.trim()).filter(s => s !== '');
+            data.skills = data.keySkills; // Duplicate for candidate portal
+        } else {
+            data.keySkills = [];
+            data.skills = [];
+        }
 
         const editId = data.id;
         delete data.id; // clear so it doesn't get saved as a field
@@ -1874,7 +2098,7 @@ window.viewJobPipeline = (btn) => {
 };
 
 window.addCandidateForJob = (jobId, department) => {
-    openModal('modal-candidate');
+    window.openCandidateModal();
     const deptSelect = document.getElementById('candidate-job-dept-select');
     const jobSelect = document.getElementById('candidate-job-select');
 
@@ -1965,21 +2189,44 @@ window.editJob = (id) => {
         }
 
         // Default for input, textarea, etc.
-        try { element.value = value == null ? '' : value; } catch (e) { /* ignore */ }
+        try {
+            if (Array.isArray(value)) {
+                element.value = value.join('\n');
+            } else {
+                element.value = value == null ? '' : value;
+            }
+        } catch (e) { /* ignore */ }
     }
 
     for (const key in job) {
         const el = form.elements[key];
         if (!el) continue;
 
+        let val = job[key];
+        // Convert Full INR budget back to LPA for the form
+        if (key === 'budget' && val > 1000) {
+            val = val / 100000;
+        }
+
         // Handle collections (multiple elements with same name)
         if (el.length && !el.tagName) {
             for (let i = 0; i < el.length; i++) {
-                populateElement(el[i], job[key]);
+                populateElement(el[i], val);
             }
         } else {
-            populateElement(el, job[key]);
+            populateElement(el, val);
         }
+    }
+
+    // Update Workspace UI
+    document.getElementById('job-title-display').innerText = job.title || 'New Opening';
+    const statusDisplay = document.getElementById('job-status-display');
+    if (statusDisplay) {
+        statusDisplay.innerText = job.status === 'Open' ? 'Active Pipeline' : (job.status === 'Closed' ? 'Filled / Closed' : 'Drafting Pipeline');
+    }
+    const budgetMonthly = document.getElementById('job-budget-monthly-imm');
+    if (budgetMonthly && job.budget) {
+        budgetMonthly.innerText = '≈ ₹' + Math.round(job.budget / 12).toLocaleString() + '/mo';
     }
 
     // Refresh custom select UI to reflect populated values
@@ -1987,6 +2234,7 @@ window.editJob = (id) => {
     // Ensure location is set according to company after population (override intentionally)
     try { prefillJobLocationFromCompany(); } catch (e) { /* ignore */ }
     document.getElementById('form-job-id').value = id;
+    document.getElementById('modal-job-title').innerText = "Edit Job Configuration";
     openModal('modal-job');
 };
 
@@ -2100,6 +2348,10 @@ document.getElementById('form-candidate').onsubmit = async (e) => {
         data.experience = Number(data.experience);
         data.currentCTC = Number(data.currentCTC);
         if (data.offeredCTC) data.offeredCTC = Number(data.offeredCTC);
+        
+        // New Rating fields
+        if (data.technicalRating) data.technicalRating = Number(data.technicalRating);
+        if (data.communicationRating) data.communicationRating = Number(data.communicationRating);
 
         // Resolve Other Qualification
         if (data.qualification === 'Other' && data.qualificationOther) {
@@ -2206,6 +2458,17 @@ window.editCandidate = (id) => {
         }
     }
 
+    // Update Initials & Profile UI
+    document.getElementById('cand-name-display').innerText = cand.name || 'New Candidate';
+    document.getElementById('cand-status-display').innerText = cand.stage || 'Applied';
+    if (window.updateInitialsDisplay) window.updateInitialsDisplay(cand.name);
+
+    // Set Ratings UI
+    if (window.setRating) {
+        window.setRating('technical', cand.technicalRating || 0);
+        window.setRating('communication', cand.communicationRating || 0);
+    }
+
     // Populate structured address fields (split from composite or individual)
     const hrCity = form.elements['addressCity'];
     const hrState = form.elements['addressState'];
@@ -2294,21 +2557,20 @@ document.getElementById('form-interview').onsubmit = async (e) => {
             showToast("Interview Scheduled!");
         }
 
-        // SYNC: Update candidate stage in database
+        // SYNC: Update candidate stage in database using centralized logic
         if (candidateId && data.status) {
-            // Do not change status if candidate is already Selected or has exited the process
-            if (currentStage !== "Selected" && currentStage !== "Rejected" && currentStage !== "Backed Out" && currentStage !== "Not Interested") {
-                let newStage = currentStage;
+            let newStage = currentStage;
 
-                if (data.status === "Selected") newStage = "Selected";
-                else if (data.status === "Rejected") newStage = "Rejected";
-                else if (data.status === "Backed Out") newStage = "Backed Out";
-                else if (data.status === "Not Interested") newStage = "Not Interested";
-                else if (data.status === "Scheduled" || data.status === "Interviewed" || data.status === "On Hold") newStage = "Interview";
+            // Map interview status to candidate stage
+            if (data.status === "Selected") newStage = "Selected";
+            else if (data.status === "Rejected") newStage = "Rejected";
+            else if (data.status === "Backed Out") newStage = "Backed Out";
+            else if (data.status === "Not Interested") newStage = "Not Interested";
+            else if (data.status === "Scheduled" || data.status === "Interviewed" || data.status === "On Hold") newStage = "Interview";
 
-                if (newStage !== currentStage) {
-                    await updateDoc(doc(db, "candidates", candidateId), { stage: newStage });
-                }
+            // Use the centralized update function to trigger side effects (Offers, Job Closing, etc.)
+            if (newStage !== currentStage) {
+                await updateCandidateStage(candidateId, newStage);
             }
         }
 
@@ -2324,7 +2586,7 @@ document.getElementById('form-interview').onsubmit = async (e) => {
 window.handleInterviewCandidateSearch = (val) => {
     const list = document.getElementById('candidate-search-list');
     const match = cachedCandidates.find(c => {
-        const searchStr = `${c.name} | ${c.phone || ''} | ${c.email} `.toLowerCase();
+        const searchStr = `${c.name} | ${c.phone || ''} | ${c.email}`.toLowerCase();
         return searchStr === val.toLowerCase();
     });
     if (match) {
@@ -2355,12 +2617,18 @@ window.editInterview = (id) => {
     // Populate searchable candidate input
     const cand = cachedCandidates.find(c => c.id === current.candidateId);
     if (cand) {
-        document.getElementById('interview-candidate-search').value = `${cand.name} | ${cand.phone || ''} | ${cand.email} `;
+        document.getElementById('interview-candidate-search').value = `${cand.name} | ${cand.phone || ''} | ${cand.email}`;
         document.getElementById('interview-candidate-id-hidden').value = cand.id;
+        
+        // Update Workspace UI
+        document.getElementById('interview-cand-name-display').innerText = cand.name;
+        document.getElementById('interview-cand-initials').innerHTML = cand.name.charAt(0).toUpperCase();
     }
+    
+    document.getElementById('interview-round-display').innerText = current.round || 'Technical Round';
 
     document.getElementById('form-interview-id').value = id;
-    document.getElementById('modal-interview-title').innerText = "Edit Interview";
+    document.getElementById('modal-interview-title').innerText = "Manage Interview & Feedback";
     openModal('modal-interview');
 };
 
@@ -2464,11 +2732,12 @@ window.editWaTemplate = (id) => {
 
 window.updateCandidateStage = async (id, stage) => {
     try {
-        const poolStages = ['Backed Out', 'Not Interested', 'Applied'];
+        const poolStages = ['REJECTED', 'Rejected', 'Backed Out', 'Not Interested', 'Applied'];
         const updateData = {
             stage,
             inTalentPool: poolStages.includes(stage),
-            isNew: false
+            isNew: false,
+            updatedAt: serverTimestamp()
         };
 
         if (stage === 'Hired') {
@@ -2565,6 +2834,147 @@ window.exportToExcel = (data, filename, sheetName = "Sheet1") => {
     }
 };
 
+window.fetchCandidatesReport = () => {
+    const data = cachedCandidates.map(c => {
+        const job = cachedJobs.find(j => j.id === c.jobId);
+        const company = job ? cachedCompanies.find(co => co.id === job.companyId) : null;
+        return {
+            // ── Personal Details ──
+            "Candidate Name": c.name || "N/A",
+            "Email": c.email || "N/A",
+            "Phone": c.phone || "N/A",
+            "Qualification": c.qualification || "N/A",
+            "Address": c.address || "N/A",
+            // ── Professional Details ──
+            "Current Company": c.currentCompany || "N/A",
+            "Designation": c.designation || "N/A",
+            "Experience (Years)": c.experience || 0,
+            "Source": c.source || "N/A",
+            // ── Applied Position ──
+            "Applied For (Job)": job ? job.title : "N/A",
+            "Department": job ? (job.department || "N/A") : "N/A",
+            "Company": company ? company.name : "N/A",
+            // ── CTC & Financials (Monthly) ──
+            "Current CTC (Monthly ₹)": c.currentCTC || 0,
+            "Current CTC Annual (LPA)": c.currentCTC ? +((c.currentCTC * 12) / 100000).toFixed(2) : 0,
+            "Expected CTC (Monthly ₹)": c.expectedCTC || 0,
+            "Expected CTC Annual (LPA)": c.expectedCTC ? +((c.expectedCTC * 12) / 100000).toFixed(2) : 0,
+            "Final / Offered CTC (Monthly ₹)": c.offeredCTC || "TBD",
+            "Final CTC Annual (LPA)": c.offeredCTC ? +((Number(c.offeredCTC) * 12) / 100000).toFixed(2) : "TBD",
+            "Notice Period (Days)": c.noticePeriod || 0,
+            "Why Changing Job": c.whyChangeJob || "N/A",
+            // ── Status ──
+            "Pipeline Stage": c.stage || "Applied",
+            "Offer Letter Sent": c.offerLetterSent || "No",
+            "Added Date": c.createdAt ? new Date(c.createdAt.seconds * 1000).toLocaleDateString() : "N/A"
+        };
+    });
+    exportToExcel(data, "Candidates_Report", "Candidates");
+};
+
+window.fetchJobsReport = () => {
+    const data = cachedJobs.map(j => {
+        const company = cachedCompanies.find(c => c.id === j.companyId);
+        const jobCandidates = cachedCandidates.filter(c => c.jobId === j.id);
+        const countByStage = (stage) => jobCandidates.filter(c => c.stage === stage).length;
+        return {
+            // ── Job Details ──
+            "Job Title": j.title || "N/A",
+            "Designation": j.designation || "N/A",
+            "Company": company ? company.name : "N/A",
+            "Department": j.department || "N/A",
+            "Min. Qualification": j.qualification || "N/A",
+            "Location": j.location || "N/A",
+            "Budget (INR)": j.budget || 0,
+            "Hiring Priority": j.priority || "Medium",
+            "Status": j.status || "Open",
+            "Closing Date": j.closingDate || "N/A",
+            "MRF Received": j.mrfReceived || "No",
+            "Required Skills": j.skills || "N/A",
+            "Job Description": j.description || "N/A",
+            // ── Pipeline Counts ──
+            "Total Candidates": jobCandidates.length,
+            "Applied": countByStage("Applied"),
+            "Screening": countByStage("Screening"),
+            "Interview": countByStage("Interview"),
+            "Selected": countByStage("Selected"),
+            "Hired": countByStage("Hired"),
+            "Rejected": countByStage("Rejected"),
+            // ── Timestamps ──
+            "Posted Date": j.createdAt ? new Date(j.createdAt.seconds * 1000).toLocaleDateString() : "N/A"
+        };
+    });
+    exportToExcel(data, "Jobs_Report", "Jobs");
+};
+
+window.fetchCompaniesReport = () => {
+    const data = cachedCompanies.map(c => {
+        const companyJobs = cachedJobs.filter(j => j.companyId === c.id);
+        const openJobs = companyJobs.filter(j => j.status !== 'Closed').length;
+        const closedJobs = companyJobs.filter(j => j.status === 'Closed').length;
+        const totalCandidates = cachedCandidates.filter(cd => {
+            const job = cachedJobs.find(j => j.id === cd.jobId);
+            return job && job.companyId === c.id;
+        }).length;
+        return {
+            // ── Company Details ──
+            "Company Name": c.name || "N/A",
+            "Industry": c.industry || "N/A",
+            "Location / HQ": c.location || "N/A",
+            "Full Address": c.address || "N/A",
+            "Website": c.website || "N/A",
+            "About": c.about || "N/A",
+            // ── Recruitment Stats ──
+            "Total Job Openings": companyJobs.length,
+            "Open Positions": openJobs,
+            "Closed Positions": closedJobs,
+            "Total Candidates": totalCandidates,
+            // ── Timestamps ──
+            "Added Date": c.createdAt ? new Date(c.createdAt.seconds * 1000).toLocaleDateString() : "N/A"
+        };
+    });
+    exportToExcel(data, "Companies_Report", "Companies");
+};
+
+window.fetchInterviewsReport = () => {
+    const data = cachedInterviews.map(i => {
+        const candidate = cachedCandidates.find(c => c.id === i.candidateId);
+        const job = candidate ? cachedJobs.find(j => j.id === candidate.jobId) : null;
+        const company = job ? cachedCompanies.find(co => co.id === job.companyId) : null;
+        return {
+            // ── Candidate Info ──
+            "Candidate Name": candidate ? candidate.name : "N/A",
+            "Candidate Phone": candidate ? (candidate.phone || "N/A") : "N/A",
+            "Candidate Email": candidate ? (candidate.email || "N/A") : "N/A",
+            "Current Company": candidate ? (candidate.currentCompany || "N/A") : "N/A",
+            "Candidate Stage": candidate ? (candidate.stage || "N/A") : "N/A",
+            // ── Interview Details ──
+            "Interviewer": i.interviewer || "N/A",
+            "Date & Time": i.dateTime ? i.dateTime.replace('T', ' ') : "N/A",
+            "Mode": i.mode || "N/A",
+            "Status": i.status || "Scheduled",
+            "Meeting Link / Location": i.meetingLink || "N/A",
+            "Feedback": i.feedback || "N/A",
+            // ── Job & Company ──
+            "Job Title": job ? (job.title || "N/A") : "N/A",
+            "Department": job ? (job.department || "N/A") : "N/A",
+            "Company": company ? company.name : "N/A"
+        };
+    });
+    exportToExcel(data, "Interviews_Report", "Interviews");
+};
+
+window.fetchTemplatesReport = () => {
+    const data = cachedWaTemplates.map(t => ({
+        "Template Name": t.name || "N/A",
+        "Category / Type": t.type || "N/A",
+        "Content": t.content || "N/A",
+        "Created Date": t.createdAt ? new Date(t.createdAt.seconds * 1000).toLocaleDateString() : "N/A",
+        "Last Updated": t.updatedAt ? new Date(t.updatedAt.seconds * 1000).toLocaleDateString() : "N/A"
+    }));
+    exportToExcel(data, "Messaging_Templates_Report", "Templates");
+};
+
 // --- RESUME PREVIEWER LOGIC ---
 window.previewResume = (url) => {
     if (!url) return;
@@ -2620,7 +3030,7 @@ window.downloadResumeCurrent = async () => {
         console.error("Download failed:", e);
         // Fallback to opening in new tab if blob fetch fails
         window.open(url, '_blank');
-    
+
         btn.innerHTML = orig;
         btn.disabled = false;
     }
@@ -3325,7 +3735,9 @@ function updateDropdowns(includeCandidateJobId = null) {
 
 // Convert native selects (single-select) into custom dropdowns for consistent rounded UI.
 function initCustomSelects() {
+    return; // Reverting to normal drop down filters as requested
     const selects = Array.from(document.querySelectorAll('select:not(.no-custom-select)'));
+
     selects.forEach(sel => {
         // skip multiple selects
         if (sel.multiple) return;
@@ -3670,25 +4082,18 @@ window.showSection = async (sectionId) => {
                 title: 'Dashboard',
                 subtitle: 'Quick overview of your recruitment activities',
                 actions: [
-                    { label: 'Add Candidate', icon: 'fa-user-plus', color: 'bg-blue-600', onclick: "openModal('modal-candidate')" },
-                    { label: 'Schedule Interview', icon: 'fa-calendar-plus', color: 'bg-purple-600', onclick: "openAddInterviewModal()" },
-                    { label: 'New Task', icon: 'fa-list-check', color: 'bg-orange-500', onclick: "openAddTaskModal()" },
+                    { label: 'Add Candidate', icon: 'fa-user-plus', color: 'bg-blue-600', onclick: "openCandidateModal()" },
+                    { label: 'Schedule Interview', icon: 'fa-calendar-plus', color: 'bg-purple-600', onclick: "openInterviewModal()" },
+
                     { label: 'Calculator', icon: 'fa-calculator', color: 'bg-slate-700', onclick: "toggleCalculator()" }
                 ]
             },
-            'tasks': {
-                title: 'HR Task Board',
-                subtitle: 'Coordinate your team\'s internal recruitment tasks',
-                actions: [
-                    { label: 'New Task', icon: 'fa-plus', color: 'bg-orange-500', onclick: "openAddTaskModal()" },
-                    { label: 'Calculator', icon: 'fa-calculator', color: 'bg-slate-700', onclick: "toggleCalculator()" }
-                ]
-            },
+
             'companies': {
                 title: 'Companies',
                 subtitle: 'Manage partner companies and organizational info',
                 actions: [
-                    { label: 'Add Company', icon: 'fa-plus', color: 'bg-blue-600', onclick: "document.getElementById('form-company').reset(); document.getElementById('form-company-id').value = ''; document.getElementById('modal-company-title').innerText = 'Add Company'; openModal('modal-company')" },
+                    { label: 'Add Company', icon: 'fa-plus', color: 'bg-blue-600', onclick: "openCompanyModal()" },
                     { label: 'Calculator', icon: 'fa-calculator', color: 'bg-slate-700', onclick: "toggleCalculator()" }
                 ]
             },
@@ -3696,7 +4101,7 @@ window.showSection = async (sectionId) => {
                 title: 'Job Management',
                 subtitle: 'Manage job openings and active listings',
                 actions: [
-                    { label: 'Create Job', icon: 'fa-plus', color: 'bg-blue-600', onclick: "document.getElementById('form-job').reset(); document.getElementById('form-job-id').value = ''; openModal('modal-job')" },
+                    { label: 'Create Job', icon: 'fa-plus', color: 'bg-blue-600', onclick: "openJobModal()" },
                     { label: 'Calculator', icon: 'fa-calculator', color: 'bg-slate-700', onclick: "toggleCalculator()" }
                 ]
             },
@@ -3704,7 +4109,7 @@ window.showSection = async (sectionId) => {
                 title: 'Candidate Database',
                 subtitle: 'Unified view of all candidate profiles',
                 actions: [
-                    { label: 'Add Candidate', icon: 'fa-user-plus', color: 'bg-blue-600', onclick: "openModal('modal-candidate')" },
+                    { label: 'Add Candidate', icon: 'fa-user-plus', color: 'bg-blue-600', onclick: "openCandidateModal()" },
                     { label: 'Calculator', icon: 'fa-calculator', color: 'bg-slate-700', onclick: "toggleCalculator()" }
                 ]
             },
@@ -3720,7 +4125,7 @@ window.showSection = async (sectionId) => {
                 title: 'Interview Scheduler',
                 subtitle: 'Coordinate and track candidate interviews',
                 actions: [
-                    { label: 'Schedule Interview', icon: 'fa-plus', color: 'bg-blue-600', onclick: "openAddInterviewModal()" },
+                    { label: 'Schedule Interview', icon: 'fa-plus', color: 'bg-blue-600', onclick: "openInterviewModal()" },
                     { label: 'Calculator', icon: 'fa-calculator', color: 'bg-slate-700', onclick: "toggleCalculator()" }
                 ]
             },
@@ -3739,10 +4144,26 @@ window.showSection = async (sectionId) => {
                     { label: 'Calculator', icon: 'fa-calculator', color: 'bg-slate-700', onclick: "toggleCalculator()" }
                 ]
             },
+            'archive': {
+                title: 'Success Archive',
+                subtitle: 'Historical records for placements and positions',
+                actions: [
+                    { label: 'Export Archive', icon: 'fa-file-export', color: 'bg-blue-600', onclick: 'exportArchiveCSV()' },
+                    { label: 'Calculator', icon: 'fa-calculator', color: 'bg-slate-700', onclick: "toggleCalculator()" }
+                ]
+            },
             'reports': {
                 title: 'Reports & Data Export',
                 subtitle: 'Analyze recruitment performance and export data',
                 actions: [
+                    { label: 'Calculator', icon: 'fa-calculator', color: 'bg-slate-700', onclick: "toggleCalculator()" }
+                ]
+            },
+            'contacts': {
+                title: 'Contacts & Dialer',
+                subtitle: 'Manage talent network and initiate remote calls',
+                actions: [
+                    { label: 'Import Contacts', icon: 'fa-file-import', color: 'bg-indigo-600', onclick: "showToast('Importing contacts...')" },
                     { label: 'Calculator', icon: 'fa-calculator', color: 'bg-slate-700', onclick: "toggleCalculator()" }
                 ]
             },
@@ -3771,9 +4192,7 @@ window.showSection = async (sectionId) => {
             case 'dashboard':
                 updateDashboard();
                 break;
-            case 'tasks':
-                renderTasks();
-                break;
+
             case 'companies':
                 renderCompanies();
                 break;
@@ -3786,6 +4205,9 @@ window.showSection = async (sectionId) => {
                 break;
             case 'talentpool':
                 renderTalentPool();
+                break;
+            case 'archive':
+                renderArchive();
                 break;
             case 'interviews':
                 renderInterviews();
@@ -3803,16 +4225,21 @@ window.showSection = async (sectionId) => {
             case 'portalsettings':
                 loadPortalSettings();
                 break;
+            case 'contacts':
+                renderContactsSection();
+                break;
             default:
                 break;
+
         }
-    } catch (error) {
-        console.error("Error showing section:", error);
-    
-        // If initial Firestore loads are still running, let them decide when to hide the loader.
+
         if (pendingInitialLoads === 0) {
             hideLoader();
         }
+
+    } catch (error) {
+        console.error("Error showing section:", error);
+
     }
 };
 
@@ -3947,173 +4374,17 @@ window.openAddInterviewModal = () => {
     openModal('modal-interview');
 };
 
-// --- TASK BOARD LOGIC ---
-window.renderTasks = () => {
-    const columns = { 'todo': document.getElementById('kanban-todo'), 'inprogress': document.getElementById('kanban-inprogress'), 'done': document.getElementById('kanban-done') };
-    const counts = { 'todo': document.getElementById('count-todo'), 'inprogress': document.getElementById('count-inprogress'), 'done': document.getElementById('count-done') };
-    Object.values(columns).forEach(col => { if (col) col.innerHTML = ''; });
-    const listCounts = { 'todo': 0, 'inprogress': 0, 'done': 0 };
 
-    const searchQuery = getEffectiveQuery('tasks');
-    const priorityFilter = document.getElementById('task-priority-filter') ? document.getElementById('task-priority-filter').value : 'All';
 
-    cachedTasks.forEach(task => {
-        const title = (task.title || '').toLowerCase();
-        const desc = (task.description || '').toLowerCase();
-        const matchesSearch = !searchQuery || title.includes(searchQuery) || desc.includes(searchQuery);
-        const matchesPriority = priorityFilter === 'All' || task.priority === priorityFilter;
 
-        if (matchesSearch && matchesPriority) {
-            const status = (task.status || 'todo').toLowerCase().replace(' ', '');
-            if (columns[status]) {
-                listCounts[status]++;
 
-                // Priority Styles
-                const priorityClass = { 'Low': 'tag-low', 'Medium': 'tag-medium', 'High': 'tag-high', 'Urgent': 'tag-urgent' }[task.priority] || 'tag-low';
 
-                // Subtasks Progress
-                const subtasks = task.subtasks || [];
-                const doneSubtasks = subtasks.filter(s => s.done).length;
-                const progress = subtasks.length > 0 ? (doneSubtasks / subtasks.length) * 100 : 0;
 
-                // Tags
-                const tagsStr = (task.tags || '').split(',').map(t => t.trim()).filter(t => t);
-                const tagsHtml = tagsStr.map(t => `<span class="tag-badge bg-slate-100 dark:bg-slate-800 text-slate-500 mr-1">${t}</span>`).join('');
 
-                columns[status].innerHTML += `
-                    <div class="glass-card p-4 rounded-2xl border border-slate-200 dark:border-slate-800 mb-3 animate-in fade-in group task-card" 
-                         draggable="true" ondragstart="dragTask(event, '${task.id}')">
-                        <div class="flex justify-between items-start mb-2">
-                            <span class="tag-badge ${priorityClass}">${task.priority}</span>
-                            <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button onclick="editTask('${task.id}')" class="text-slate-400 hover:text-blue-500 transition" title="Edit Task"><i class="fas fa-edit text-[10px]"></i></button>
-                                <button onclick="deleteDocById('tasks', '${task.id}')" class="text-slate-400 hover:text-red-500 transition" title="Delete Task"><i class="fas fa-trash text-[10px]"></i></button>
-                            </div>
-                        </div>
-                        <h5 class="text-sm font-bold text-slate-800 dark:text-white">${task.title}</h5>
-                        ${task.description ? `<p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 task-description-snippet">${task.description}</p>` : ''}
-                        
-                        <div class="mt-3 flex flex-wrap gap-1">
-                            ${tagsHtml}
-                        </div>
 
-                        ${subtasks.length > 0 ? `
-                        <div class="mt-3 space-y-1.5">
-                            <div class="flex justify-between items-center text-[10px] font-bold text-slate-500">
-                                <span>Checklist</span>
-                                <span>${doneSubtasks}/${subtasks.length}</span>
-                            </div>
-                            <div class="progress-bar-container">
-                                <div class="progress-bar-fill" style="width: ${progress}%"></div>
-                            </div>
-                        </div>
-                        ` : ''}
 
-                        <div class="flex justify-between items-center mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/50">
-                            <span class="text-[9px] font-medium text-slate-500 flex items-center gap-1">
-                                <i class="far fa-calendar text-[10px]"></i> ${task.dueDate || 'No date'}
-                            </span>
-                            <div class="flex items-center gap-2">
-                                ${status === 'todo' ? `<button onclick="moveTask('${task.id}', 'inprogress')" class="text-[10px] font-bold text-blue-500 hover:underline">Start</button>` : ''}
-                                ${status === 'inprogress' ? `<button onclick="moveTask('${task.id}', 'done')" class="text-[10px] font-bold text-emerald-500 hover:underline">Done</button>` : ''}
-                                ${status === 'done' ? `<button onclick="moveTask('${task.id}', 'todo')" class="text-[10px] font-bold text-slate-500 hover:underline">Reopen</button>` : ''}
-                            </div>
-                        </div>
-                    </div>`;
-            }
-        }
-    });
-    Object.keys(counts).forEach(k => { if (counts[k]) counts[k].innerText = listCounts[k]; });
-};
 
-window.dragTask = (e, id) => {
-    e.dataTransfer.setData('taskId', id);
-    e.target.classList.add('dragging');
-};
 
-window.allowTaskDrop = (e) => {
-    e.preventDefault();
-    const col = e.target.closest('.kanban-column');
-    if (col) col.classList.add('drag-over');
-};
-
-window.dropTask = async (e, status) => {
-    e.preventDefault();
-    const id = e.dataTransfer.getData('taskId');
-    const cols = document.querySelectorAll('.kanban-column');
-    cols.forEach(c => c.classList.remove('drag-over'));
-
-    // Remove dragging class from all cards (just in case)
-    document.querySelectorAll('.task-card').forEach(c => c.classList.remove('dragging'));
-
-    if (id) {
-        moveTask(id, status);
-    }
-};
-
-window.openAddTaskModal = () => {
-    const form = document.getElementById('form-task');
-    if (form) form.reset();
-    const idInput = document.getElementById('form-task-id');
-    if (idInput) idInput.value = '';
-
-    document.getElementById('task-subtasks-container').innerHTML = '';
-    document.getElementById('modal-task-title').innerHTML = '<i class="fas fa-list-check"></i> Add New Task';
-
-    openModal('modal-task');
-};
-
-window.editTask = (id) => {
-    const task = cachedTasks.find(t => t.id === id);
-    if (!task) return;
-    const form = document.getElementById('form-task');
-    if (form) form.reset();
-
-    const idInput = document.getElementById('form-task-id');
-    if (idInput) idInput.value = id;
-
-    if (form.elements['title']) form.elements['title'].value = task.title || '';
-    if (form.elements['description']) form.elements['description'].value = task.description || '';
-    if (form.elements['priority']) form.elements['priority'].value = task.priority || 'Medium';
-    if (form.elements['dueDate']) form.elements['dueDate'].value = task.dueDate || '';
-    if (form.elements['tags']) form.elements['tags'].value = task.tags || '';
-
-    // Subtasks
-    const container = document.getElementById('task-subtasks-container');
-    container.innerHTML = '';
-    if (task.subtasks) {
-        task.subtasks.forEach((s, idx) => {
-            addTaskSubtask(s.text, s.done, idx);
-        });
-    }
-
-    document.getElementById('modal-task-title').innerHTML = '<i class="fas fa-edit"></i> Edit Task';
-    openModal('modal-task');
-};
-
-window.moveTask = async (id, status) => {
-    try {
-        const task = cachedTasks.find(t => t.id === id);
-        if (task && task.status === status) return; // No change
-        await updateDoc(doc(db, "tasks", id), { status });
-        showToast("Moved to " + status);
-    } catch (e) { showError("Failed to move task"); }
-};
-
-window.addTaskSubtask = (text = '', done = false, idx = null) => {
-    const container = document.getElementById('task-subtasks-container');
-    const div = document.createElement('div');
-    div.className = 'subtask-item animate-in fade-in';
-    const subtaskId = `subtask-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-    div.innerHTML = `
-        <label for="${subtaskId}" class="sr-only">Mark subtask as done</label>
-        <input type="checkbox" id="${subtaskId}" class="task-subtask-check w-4 h-4 rounded text-orange-600 focus:ring-orange-500" ${done ? 'checked' : ''}>
-        <input type="text" class="task-subtask-text flex-1 bg-transparent border-none outline-none text-xs font-medium dark:text-slate-300" 
-            placeholder="Subtask description..." value="${text}">
-        <button type="button" onclick="this.parentElement.remove()" class="text-slate-400 hover:text-red-500 transition"><i class="fas fa-times text-[10px]"></i></button>
-    `;
-    container.appendChild(div);
-};
 
 window.renderOffers = () => {
     const list = document.getElementById('offers-list');
@@ -4460,11 +4731,11 @@ window.loadPortalSettings = async () => {
                                     </div>
                                     <select id="manual-job-dept" class="theme-input text-sm md:w-56 font-bold h-11" onchange="filterPortalManualJobs()">
                                         <option value="">All Departments</option>
-                                        ${[...new Set(cachedJobs.filter(j=>j.status==='Open').map(j=>j.department).filter(Boolean))].map(d=>`<option value="${d}">${d}</option>`).join('')}
+                                        ${[...new Set(cachedJobs.filter(j => j.status === 'Open').map(j => j.department).filter(Boolean))].map(d => `<option value="${d}">${d}</option>`).join('')}
                                     </select>
                                     <select id="manual-job-loc" class="theme-input text-sm md:w-56 font-bold h-11" onchange="filterPortalManualJobs()">
                                         <option value="">All Locations</option>
-                                        ${[...new Set(cachedJobs.filter(j=>j.status==='Open').map(j=>j.location).filter(Boolean))].map(l=>`<option value="${l}">${l}</option>`).join('')}
+                                        ${[...new Set(cachedJobs.filter(j => j.status === 'Open').map(j => j.location).filter(Boolean))].map(l => `<option value="${l}">${l}</option>`).join('')}
                                     </select>
                                 </div>
                                 
@@ -4473,12 +4744,12 @@ window.loadPortalSettings = async () => {
                                         <input type="checkbox" id="manual-job-select-all" class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" onchange="toggleAllManualJobs(this.checked)">
                                         Select All Visible Match
                                     </label>
-                                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-white dark:bg-slate-900 px-3 py-1 rounded-full shadow-sm border border-slate-200 dark:border-slate-700" id="manual-job-count">Showing ${cachedJobs.filter(j=>j.status==='Open').length} jobs</span>
+                                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-white dark:bg-slate-900 px-3 py-1 rounded-full shadow-sm border border-slate-200 dark:border-slate-700" id="manual-job-count">Showing ${cachedJobs.filter(j => j.status === 'Open').length} jobs</span>
                                 </div>
                                 
                                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar" id="manual-jobs-list">
                                     ${cachedJobs.filter(j => j.status === 'Open').map(j => `
-                                        <label class="manual-job-item flex items-start gap-3 py-2 cursor-pointer bg-white dark:bg-slate-900 p-3.5 rounded-xl transition-all border border-slate-200 dark:border-slate-700 shadow-sm hover:border-blue-400 group" data-title="${(j.title||'').toLowerCase()}" data-dept="${j.department||''}" data-loc="${j.location||''}">
+                                        <label class="manual-job-item flex items-start gap-3 py-2 cursor-pointer bg-white dark:bg-slate-900 p-3.5 rounded-xl transition-all border border-slate-200 dark:border-slate-700 shadow-sm hover:border-blue-400 group" data-title="${(j.title || '').toLowerCase()}" data-dept="${j.department || ''}" data-loc="${j.location || ''}">
                                             <input type="checkbox" name="selectedJobsList" value="${j.id}" ${data.selectedJobsList?.includes(j.id) ? 'checked' : ''} class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 mt-0.5 transition-transform group-hover:scale-110" onchange="updateManualJobSelectAll()">
                                             <div class="flex flex-col flex-1 min-w-0">
                                                 <span class="text-xs font-black text-slate-800 dark:text-slate-200 leading-tight truncate" title="${j.title}">${j.title}</span>
@@ -4507,16 +4778,16 @@ window.loadPortalSettings = async () => {
             const loc = document.getElementById('manual-job-loc').value;
             const items = document.querySelectorAll('.manual-job-item');
             let count = 0;
-            
+
             items.forEach(item => {
                 const iTitle = item.getAttribute('data-title');
                 const iDept = item.getAttribute('data-dept');
                 const iLoc = item.getAttribute('data-loc');
-                
+
                 const matchSearch = iTitle.includes(search);
                 const matchDept = !dept || iDept === dept;
                 const matchLoc = !loc || iLoc === loc;
-                
+
                 if (matchSearch && matchDept && matchLoc) {
                     item.style.display = 'flex';
                     count++;
@@ -4524,7 +4795,7 @@ window.loadPortalSettings = async () => {
                     item.style.display = 'none';
                 }
             });
-            
+
             const countEl = document.getElementById('manual-job-count');
             if (countEl) countEl.innerText = `Showing ${count} jobs`;
             window.updateManualJobSelectAll();
@@ -4535,7 +4806,7 @@ window.loadPortalSettings = async () => {
             items.forEach(item => {
                 if (item.style.display !== 'none') {
                     const cb = item.querySelector('input[type="checkbox"]');
-                    if(cb) cb.checked = checked;
+                    if (cb) cb.checked = checked;
                 }
             });
             window.updateManualJobSelectAll();
@@ -4553,7 +4824,7 @@ window.loadPortalSettings = async () => {
                 }
             });
             const master = document.getElementById('manual-job-select-all');
-            if(master) {
+            if (master) {
                 master.checked = anyVisible && allChecked;
             }
         };
@@ -4993,6 +5264,7 @@ window.renderTalentPool = () => {
         const newCount = jobResponses.filter(c => c.isNew).length;
         const rejectedStages = ['REJECTED', 'Rejected', 'Backed Out', 'Not Interested'];
         const shortlistedCount = cachedCandidates.filter(c => c.jobId === j.id && !c.inTalentPool && !rejectedStages.includes(c.stage)).length;
+        const rejectedCount = cachedCandidates.filter(c => c.jobId === j.id && rejectedStages.includes(c.stage)).length;
         const statusColor = j.status === 'Open' || j.status === 'Active' ? 'emerald' : 'slate';
 
         return `
@@ -5024,6 +5296,10 @@ window.renderTalentPool = () => {
                                 <div class="relative">
                                     <p class="text-[9px] uppercase font-bold text-slate-400 tracking-wider mb-0.5">Shortlisted</p>
                                     <p class="text-sm font-bold text-emerald-600">${shortlistedCount}</p>
+                                </div>
+                                <div>
+                                    <p class="text-[9px] uppercase font-bold text-slate-400 tracking-wider mb-0.5">Rejected</p>
+                                    <p class="text-sm font-bold text-red-500">${rejectedCount}</p>
                                 </div>
                                 <div>
                                     <p class="text-[9px] uppercase font-bold text-slate-400 tracking-wider mb-0.5">New</p>
@@ -5337,41 +5613,7 @@ window.updateTalentPoolBadge = () => {
         }
     }
 };
-document.getElementById('form-task').onsubmit = async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const taskId = document.getElementById('form-task-id') ? document.getElementById('form-task-id').value : '';
-
-    // Collect Subtasks
-    const subtaskItems = document.querySelectorAll('#task-subtasks-container .subtask-item');
-    const subtasks = Array.from(subtaskItems).map(item => ({
-        text: item.querySelector('.task-subtask-text').value,
-        done: item.querySelector('.task-subtask-check').checked
-    })).filter(s => s.text.trim());
-
-    const taskData = {
-        title: fd.get('title'),
-        description: fd.get('description') || '',
-        priority: fd.get('priority'),
-        dueDate: fd.get('dueDate') || '',
-        tags: fd.get('tags') || '',
-        subtasks: subtasks,
-        updatedAt: serverTimestamp()
-    };
-
-    try {
-        if (taskId) {
-            await updateDoc(doc(db, "tasks", taskId), taskData);
-            showToast("Task Updated");
-        } else {
-            taskData.status = 'todo';
-            taskData.createdAt = serverTimestamp();
-            await addDoc(collection(db, "tasks"), taskData);
-            showToast("Task Created");
-        }
-        closeModal('modal-task');
-    } catch (e) { showError("Failed to save task"); }
-};
+// Task Board logic removed per user request
 
 
 
@@ -5573,416 +5815,471 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-// ===================== NOTIFICATION CENTER LOGIC =====================
-let dismissedNotifKeys = JSON.parse(localStorage.getItem('dismissedNotifs') || '[]');
 
-function computeNotifications() {
-    const notifs = [];
-    const todayStr = new Date().toISOString().split('T')[0];
-    const now = Date.now();
-    const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+// ===================== SEGMENTED PORTFOLIO REPORTS =====================
 
-    // 1. Interviews Today
-    const todayInterviews = cachedInterviews.filter(i => i.dateTime && i.dateTime.startsWith(todayStr));
-    todayInterviews.forEach(i => {
-        const cand = cachedCandidates.find(c => c.id === i.candidateId);
-        const dt = new Date(i.dateTime);
-        const timeStr = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        notifs.push({
-            key: `int-today-${i.id}`,
-            icon: 'fa-calendar-check',
-            color: 'text-orange-500 bg-orange-100 dark:bg-orange-900/30',
-            title: `Interview at ${timeStr}`,
-            desc: cand ? cand.name : 'Unknown candidate',
-            action: () => showSection('interviews'),
-            category: 'Interviews Today'
+/**
+ * Internal Helper for Unified Candidate Data Mapping
+ * Categorizes and formats candidate objects for cross-segment auditing.
+ */
+const mapCandidateForAudit = (c) => {
+    const job = cachedJobs.find(j => j.id === c.jobId);
+    const company = job ? cachedCompanies.find(co => co.id === job.companyId) : null;
+
+    // Segment Identification Logic
+    let segment = "Active Pipeline";
+    const rejectedStages = ['REJECTED', 'Rejected', 'Backed Out', 'Not Interested', 'Applied'];
+
+    if (c.stage === 'Hired') segment = "Hired Archive";
+    else if (c.inTalentPool || rejectedStages.includes(c.stage)) segment = "Talent Pool / Rejections";
+
+    return {
+        "Database Segment": segment,
+        "Candidate Name": c.name || "N/A",
+        "Email": c.email || "N/A",
+        "Phone": c.phone || "N/A",
+        "Current Stage": c.stage || "Applied",
+        "Department": job ? (job.department || "N/A") : "N/A",
+        "Job Title": job ? job.title : "N/A",
+        "Company": company ? company.name : "N/A",
+        "Qualification": c.qualification || "N/A",
+        "Experience (Yrs)": c.experience || 0,
+        "Current Company": c.currentCompany || "N/A",
+        "Designation": c.designation || "N/A",
+        "Current CTC (Monthly ₹)": c.currentCTC || 0,
+        "Expected CTC (Monthly ₹)": c.expectedCTC || 0,
+        "Final / Offered CTC (Monthly ₹)": c.offeredCTC || "TBD",
+        "Annual LPA": c.offeredCTC ? +((Number(c.offeredCTC) * 12) / 100000).toFixed(2) : "TBD",
+        "Notice Period (Days)": c.noticePeriod || 0,
+        "Source": c.source || "N/A",
+        "Why Changing": c.whyChangeJob || "N/A",
+        "Added Date": c.createdAt ? new Date(c.createdAt.seconds * 1000).toLocaleDateString() : "N/A"
+    };
+};
+
+/**
+ * MASTER RECRUITMENT AUDIT
+ * Exports EVERY candidate in the system with their assigned segment.
+ */
+window.fetchMasterAuditReport = () => {
+    if (cachedCandidates.length === 0) return showToast("No data to export.", "warning");
+    const data = cachedCandidates.map(mapCandidateForAudit);
+    exportToExcel(data, "Master_Portfolio_Audit", "All Candidates");
+};
+
+/**
+ * ACTIVE PIPELINE SNAPSHOT
+ * Exports only candidates currently in progress (not Hired or in Talent Pool).
+ */
+window.fetchPipelineSnapshotReport = () => {
+    const rejectedStages = ['REJECTED', 'Rejected', 'Backed Out', 'Not Interested', 'Applied'];
+    const active = cachedCandidates.filter(c => !c.inTalentPool && c.stage !== 'Hired' && !rejectedStages.includes(c.stage));
+
+    if (active.length === 0) return showToast("No active pipeline data.", "info");
+    const data = active.map(mapCandidateForAudit);
+    exportToExcel(data, "Active_Pipeline_Snapshot", "Pipeline Tracker");
+};
+
+/**
+ * HIRING SUCCESS & ARCHIVE
+ * Exports only candidates marked as 'Hired'.
+ */
+window.fetchHiringSuccessReport = () => {
+    const hired = cachedCandidates.filter(c => c.stage === 'Hired');
+    if (hired.length === 0) return showToast("Hired Archive is empty.", "info");
+    const data = hired.map(mapCandidateForAudit);
+    exportToExcel(data, "Hiring_Success_Archive", "Success Ledger");
+};
+
+/**
+ * TALENT POOL INSIGHTS
+ * Exports raw applications and rejected/archived profiles.
+ */
+window.fetchTalentPoolInsightsReport = () => {
+    const rejectedStages = ['REJECTED', 'Rejected', 'Backed Out', 'Not Interested', 'Applied'];
+    const pool = cachedCandidates.filter(c => c.inTalentPool || rejectedStages.includes(c.stage));
+
+    if (pool.length === 0) return showToast("Talent Pool is empty.", "info");
+    const data = pool.map(mapCandidateForAudit);
+    exportToExcel(data, "Talent_Pool_Rejection_Insights", "Pool Insights");
+};
+
+
+// --- INTERVIEW AUTO-CLEANUP & CALENDAR ---
+
+/**
+ * Automatically deletes interview records older than 21 days 
+ * if they are in a completed status (Done, Selected, Rejected, etc.)
+ */
+async function autoCleanupOldInterviews() {
+    try {
+        const now = new Date();
+        const cutoff = new Date(now.getTime() - (21 * 24 * 60 * 60 * 1000)); // 21 days ago
+
+        // Find interviews to delete
+        const toDelete = cachedInterviews.filter(i => {
+            if (!i.dateTime) return false;
+            const interviewDate = new Date(i.dateTime);
+            const isOld = interviewDate < cutoff;
+            const isCompleted = ['Done', 'Selected', 'Rejected', 'Backed Out', 'Not Interested', 'Interviewed'].includes(i.status);
+            return isOld && isCompleted;
         });
-    });
 
-    // 2. Candidates Stuck (same stage for 7+ days)
-    cachedCandidates.forEach(c => {
-        if (['Hired', 'Rejected', 'Backed Out', 'Not Interested'].includes(c.stage)) return;
-        const created = c.updatedAt || c.createdAt;
-        if (!created) return;
-        const ts = created.seconds ? created.seconds * 1000 : new Date(created).getTime();
-        if (now - ts > SEVEN_DAYS) {
-            const daysStuck = Math.floor((now - ts) / (24 * 60 * 60 * 1000));
-            notifs.push({
-                key: `stuck-${c.id}`,
-                icon: 'fa-hourglass-half',
-                color: 'text-amber-500 bg-amber-100 dark:bg-amber-900/30',
-                title: `Stuck for ${daysStuck} days`,
-                desc: `${c.name} — ${c.stage}`,
-                action: () => { showSection('candidates'); },
-                category: 'Attention Needed'
-            });
+        if (toDelete.length > 0) {
+            console.log(`Auto-Cleanup: Deleting ${toDelete.length} old interviews.`);
+            for (const item of toDelete) {
+                await deleteDoc(doc(db, "interviews", item.id));
+            }
         }
-    });
-
-    // 3. Overdue Tasks
-    cachedTasks.forEach(t => {
-        if ((t.status || 'todo').toLowerCase() === 'done') return;
-        if (!t.dueDate) return;
-        const due = new Date(t.dueDate);
-        if (due < new Date(todayStr)) {
-            notifs.push({
-                key: `task-overdue-${t.id}`,
-                icon: 'fa-clock',
-                color: 'text-red-500 bg-red-100 dark:bg-red-900/30',
-                title: 'Overdue task',
-                desc: t.title,
-                action: () => showSection('tasks'),
-                category: 'Overdue Tasks'
-            });
-        }
-    });
-
-    // 4. New Applications Today
-    const newApps = cachedCandidates.filter(c => {
-        if (c.stage !== 'Applied') return false;
-        const ts = c.createdAt;
-        if (!ts) return false;
-        const d = new Date(ts.seconds ? ts.seconds * 1000 : ts);
-        return d.toISOString().split('T')[0] === todayStr;
-    });
-    if (newApps.length > 0) {
-        notifs.push({
-            key: `new-apps-${todayStr}`,
-            icon: 'fa-inbox',
-            color: 'text-blue-500 bg-blue-100 dark:bg-blue-900/30',
-            title: `${newApps.length} new application${newApps.length > 1 ? 's' : ''} today`,
-            desc: newApps.slice(0, 3).map(c => c.name).join(', ') + (newApps.length > 3 ? '...' : ''),
-            action: () => showSection('talentpool'),
-            category: 'New Applications'
-        });
+    } catch (error) {
+        console.error("Auto-Cleanup Error:", error);
     }
-
-    // 5. Offers Pending Response
-    const pendingOffers = cachedOffers.filter(o => !o.status || o.status === 'Pending' || o.status === 'Sent');
-    if (pendingOffers.length > 0) {
-        notifs.push({
-            key: `offers-pending-${todayStr}`,
-            icon: 'fa-signature',
-            color: 'text-emerald-500 bg-emerald-100 dark:bg-emerald-900/30',
-            title: `${pendingOffers.length} offer${pendingOffers.length > 1 ? 's' : ''} awaiting response`,
-            desc: 'Review in Offer Management',
-            action: () => showSection('offers'),
-            category: 'Pending Offers'
-        });
-    }
-
-    return notifs;
 }
 
-function refreshNotificationBadge() {
-    const notifs = computeNotifications();
-    const unread = notifs.filter(n => !dismissedNotifKeys.includes(n.key));
-    const badge = document.getElementById('notif-badge');
-    if (badge) {
-        if (unread.length > 0) {
-            badge.innerText = unread.length > 99 ? '99+' : unread.length;
-            badge.classList.remove('hidden');
-        } else {
-            badge.classList.add('hidden');
-        }
+/**
+ * Opens a functional Calendar View for interviews
+ * Supports monthly grid visualization
+ */
+window.openInterviewsCalendar = () => {
+    const modal = document.getElementById('modal-calendar-view');
+    if (!modal) {
+        // Fallback: If modal not defined yet, alert
+        alert("Calendar View is currently being initialized. Please try again in 1 minute.");
+        return;
     }
-}
 
-function renderNotifications() {
-    const container = document.getElementById('notification-items');
+    // Set default month to current
+    const now = new Date();
+    renderInterviewsCalendarGrid(now.getFullYear(), now.getMonth());
+    openModal('modal-calendar-view');
+};
+
+/**
+ * Renders a grid-based calendar view of interviews
+ */
+function renderInterviewsCalendarGrid(year, month) {
+    const container = document.getElementById('calendar-grid-container');
+    const headerTitle = document.getElementById('calendar-month-title');
     if (!container) return;
 
-    const notifs = computeNotifications();
-    const unread = notifs.filter(n => !dismissedNotifKeys.includes(n.key));
+    const date = new Date(year, month, 1);
+    const monthName = date.toLocaleString('default', { month: 'long' });
+    headerTitle.innerText = `${monthName} ${year}`;
 
-    if (notifs.length === 0) {
-        container.innerHTML = `
-            <div class="flex flex-col items-center justify-center py-12 text-slate-400">
-                <i class="fas fa-bell-slash text-3xl mb-3 opacity-20"></i>
-                <p class="text-sm">All clear — no notifications!</p>
-            </div>`;
-        return;
-    }
-
-    // Group by category
-    const groups = {};
-    notifs.forEach(n => {
-        if (!groups[n.category]) groups[n.category] = [];
-        groups[n.category].push(n);
-    });
+    // Get days in month
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const firstDayIndex = date.getDay(); // 0 is Sunday
 
     let html = '';
-    Object.keys(groups).forEach(category => {
-        html += `<div class="px-4 pt-3 pb-1">
-            <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400">${category}</p>
-        </div>`;
-        groups[category].forEach(n => {
-            const isRead = dismissedNotifKeys.includes(n.key);
-            html += `
-            <div class="flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${isRead ? 'opacity-50' : ''}"
-                 onclick="handleNotifClick('${n.key}', ${groups[category].indexOf(n)}, '${n.category}')">
-                <div class="w-9 h-9 rounded-xl ${n.color} flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <i class="fas ${n.icon} text-sm"></i>
-                </div>
-                <div class="flex-1 min-w-0">
-                    <p class="text-sm font-semibold ${isRead ? '' : ''}" style="color: var(--text-primary)">${n.title}</p>
-                    <p class="text-xs truncate" style="color: var(--text-muted)">${n.desc}</p>
-                </div>
-                ${!isRead ? '<div class="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 mt-2"></div>' : ''}
-            </div>`;
-        });
+
+    // Day Headers
+    ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].forEach(day => {
+        html += `<div class="calendar-day-header">${day}</div>`;
     });
+
+    // Add empty slots for previous month
+    for (let i = 0; i < firstDayIndex; i++) {
+        html += `<div class="calendar-day-cell opacity-25"></div>`;
+    }
+
+    // Add days
+    for (let day = 1; day <= daysInMonth; day++) {
+        const currentDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const dayInterviews = cachedInterviews.filter(i => i.dateTime && i.dateTime.startsWith(currentDateStr));
+
+        let interviewBubbles = '';
+        dayInterviews.forEach(i => {
+            const cand = cachedCandidates.find(c => c.id === i.candidateId);
+            const time = i.dateTime ? new Date(i.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+            interviewBubbles += `
+                <div class="calendar-interview-bubble" title="${cand ? cand.name : 'Unknown'} @ ${time}">
+                    ${time} ${cand ? cand.name : 'Unknown'}
+                </div>
+            `;
+        });
+
+        const isToday = (day === new Date().getDate() && month === new Date().getMonth() && year === new Date().getFullYear());
+        const cellClass = `calendar-day-cell ${isToday ? 'is-today' : ''}`;
+
+        html += `
+            <div class="${cellClass}">
+                <span class="day-number">${day}</span>
+                <div class="mt-1">${interviewBubbles}</div>
+            </div>
+        `;
+    }
 
     container.innerHTML = html;
+
+    // Set navigation buttons
+    window.currentCalendarDate = { year, month };
 }
 
-// Store computed notifications globally so click handler can reference them
-let _cachedNotifs = [];
+window.prevCalendarMonth = () => {
+    const { year, month } = window.currentCalendarDate;
+    const prevDate = new Date(year, month - 1, 1);
+    renderInterviewsCalendarGrid(prevDate.getFullYear(), prevDate.getMonth());
+};
 
-window.handleNotifClick = (key, index, category) => {
-    // Find and execute the notification action
-    const notifs = computeNotifications();
-    const notif = notifs.find(n => n.key === key);
-    if (notif && notif.action) {
-        // Mark as read
-        if (!dismissedNotifKeys.includes(key)) {
-            dismissedNotifKeys.push(key);
-            localStorage.setItem('dismissedNotifs', JSON.stringify(dismissedNotifKeys));
+window.nextCalendarMonth = () => {
+    const { year, month } = window.currentCalendarDate;
+    const nextDate = new Date(year, month + 1, 1);
+    renderInterviewsCalendarGrid(nextDate.getFullYear(), nextDate.getMonth());
+};
+
+/* ==========================================================================
+   CONTACTS & DIALER LOGIC
+   ========================================================================== */
+
+let dialerCallLogs = JSON.parse(localStorage.getItem('dialerCallLogs') || '[]');
+
+window.renderContactsSection = () => {
+    const tableBody = document.getElementById('contacts-table-body');
+    if (!tableBody) return;
+
+    if (!cachedCandidates || cachedCandidates.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="4" class="py-20 text-center text-slate-400">No candidates found in the system.</td></tr>`;
+        return;
+    }
+
+    renderContactsTable(cachedCandidates);
+    renderMiniCallLogs();
+};
+
+function renderContactsTable(contacts) {
+    const tableBody = document.getElementById('contacts-table-body');
+    const colors = ['bg-blue-500', 'bg-indigo-500', 'bg-purple-500', 'bg-emerald-500', 'bg-rose-500', 'bg-amber-500'];
+
+    tableBody.innerHTML = contacts.map((c, index) => {
+        const initials = getInitials(c.name);
+        const color = colors[index % colors.length];
+        
+        return `
+            <tr class="contact-row group">
+                <td class="px-4 py-4">
+                    <div class="flex items-center gap-3">
+                        <div class="contact-avatar ${color}">${initials}</div>
+                        <div>
+                            <div class="font-bold text-slate-800 dark:text-white">${c.name}</div>
+                            <div class="text-[10px] text-slate-500 font-medium">${c.phone || 'No phone'}</div>
+                        </div>
+                    </div>
+                </td>
+                <td class="px-4 py-4 text-xs font-medium text-slate-600 dark:text-slate-400">${c.position || 'N/A'}</td>
+                <td class="px-4 py-4 text-xs font-medium text-slate-600 dark:text-slate-400">${c.company || 'N/A'}</td>
+                <td class="px-4 py-4">
+                    <div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onclick="quickDial('${c.phone}')" class="action-btn-circle bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400" title="Quick Call">
+                            <i class="fas fa-phone"></i>
+                        </button>
+                        <button onclick="window.open('https://wa.me/91${c.phone}', '_blank')" class="action-btn-circle bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400" title="WhatsApp Message">
+                            <i class="fab fa-whatsapp"></i>
+                        </button>
+                        <button onclick="window.open('mailto:${c.email}', '_blank')" class="action-btn-circle bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400" title="Send Email">
+                            <i class="fas fa-envelope"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+window.filterContacts = (term) => {
+    const filtered = cachedCandidates.filter(c => 
+        c.name.toLowerCase().includes(term.toLowerCase()) || 
+        (c.phone && c.phone.includes(term)) ||
+        (c.position && c.position.toLowerCase().includes(term.toLowerCase()))
+    );
+    renderContactsTable(filtered);
+};
+
+window.dialPadPush = (val) => {
+    const input = document.getElementById('dialer-input');
+    if (input.value.length < 15) {
+        input.value += val;
+        // Trigger input event for any listeners
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        // Simple haptic feedback simulation
+        if (window.navigator.vibrate) window.navigator.vibrate(10);
+    }
+};
+
+window.dialPadClear = () => {
+    const input = document.getElementById('dialer-input');
+    input.value = input.value.slice(0, -1);
+};
+
+window.quickDial = (phone) => {
+    if (!phone) return showToast("No phone number available");
+    const cleanPhone = phone.replace(/\D/g, '');
+    document.getElementById('dialer-input').value = cleanPhone;
+    initiateDialerCall();
+};
+
+window.initiateDialerCall = async () => {
+    const phone = document.getElementById('dialer-input').value;
+    if (!phone || phone.length < 10) {
+        showToast("Please enter a valid phone number");
+        return;
+    }
+
+    const cleanPhone = phone.replace(/\D/g, '');
+    
+    // Add to local logs
+    const contact = cachedCandidates.find(c => c.phone && c.phone.replace(/\D/g, '') === cleanPhone);
+    const logEntry = {
+        name: contact ? contact.name : 'Unknown',
+        phone: cleanPhone,
+        timestamp: new Date().toISOString(),
+        id: Date.now()
+    };
+    
+    dialerCallLogs.unshift(logEntry);
+    if (dialerCallLogs.length > 20) dialerCallLogs.pop();
+    localStorage.setItem('dialerCallLogs', JSON.stringify(dialerCallLogs));
+    
+    renderMiniCallLogs();
+    
+    // Firebase Integration
+    await initiateRemoteCall(cleanPhone);
+};
+
+async function initiateRemoteCall(phoneNumber) {
+    if (!auth.currentUser) return showToast("Please sign in to use the dialer");
+    
+    try {
+        // Find candidate name from the UI context if possible
+        let candidateName = "Manual Dial";
+        const immersiveName = document.querySelector('.immersive-workspace .workspace-sidebar h4')?.innerText;
+        if (immersiveName && immersiveName !== "New Partner" && immersiveName !== "Candidate Name") {
+            candidateName = immersiveName;
         }
-        // Close panel
-        document.getElementById('notification-panel').classList.add('hidden');
-        // Navigate
-        notif.action();
-        refreshNotificationBadge();
+
+        // Use setDoc with User UID as the document ID for the remote dialer app to listen correctly
+        await setDoc(doc(db, "remote_calls", auth.currentUser.uid), {
+            phoneNumber: phoneNumber,
+            candidateName: candidateName,
+            status: "pending",
+            callerName: auth.currentUser?.displayName || "Recruiter",
+            callerEmail: auth.currentUser?.email || "unknown",
+            timestamp: serverTimestamp()
+        });
+        showToast("Request sent to Remote Dialer!");
+    } catch (e) {
+        console.error("Dialer error:", e);
+        showToast("Remote dialer sync failed");
     }
-};
+}
 
-window.toggleNotifications = (e) => {
-    e.stopPropagation();
-    const panel = document.getElementById('notification-panel');
-    const isHidden = panel.classList.contains('hidden');
-    // Close profile menu if open
-    const profileMenu = document.getElementById('profile-menu');
-    if (profileMenu) profileMenu.classList.remove('show');
-    if (isHidden) {
-        renderNotifications();
-        panel.classList.remove('hidden');
-    } else {
-        panel.classList.add('hidden');
-    }
-};
-
-window.markAllNotificationsRead = () => {
-    const notifs = computeNotifications();
-    notifs.forEach(n => {
-        if (!dismissedNotifKeys.includes(n.key)) {
-            dismissedNotifKeys.push(n.key);
-        }
-    });
-    // Keep only last 200 keys to prevent localStorage bloat
-    if (dismissedNotifKeys.length > 200) {
-        dismissedNotifKeys = dismissedNotifKeys.slice(-200);
-    }
-    localStorage.setItem('dismissedNotifs', JSON.stringify(dismissedNotifKeys));
-    refreshNotificationBadge();
-    renderNotifications();
-};
-
-// Close notification panel on outside click
-window.addEventListener('click', (e) => {
-    const panel = document.getElementById('notification-panel');
-    const wrapper = document.getElementById('notification-wrapper');
-    if (panel && wrapper && !wrapper.contains(e.target) && !panel.classList.contains('hidden')) {
-        panel.classList.add('hidden');
-    }
-});
-
-// --- EXCEL REPORTS LOGIC (ExcelJS) ---
-
-async function downloadFormattedExcel(filename, sheetName, columns, rows) {
-    if (typeof ExcelJS === 'undefined') {
-        showError("Excel library not loaded. Please try again.");
+function renderMiniCallLogs() {
+    const container = document.getElementById('mini-call-logs');
+    if (!container) return;
+    
+    if (dialerCallLogs.length === 0) {
+        container.innerHTML = `<div class="text-center py-6 opacity-40"><i class="fas fa-history text-xl mb-2"></i><p class="text-[10px]">No recent calls</p></div>`;
         return;
     }
     
-    showToast("Generating Excel file, please wait...");
-    try {
-        const workbook = new ExcelJS.Workbook();
-        workbook.creator = 'Nextgen Recruitment Suite';
-        workbook.created = new Date();
-        
-        const sheet = workbook.addWorksheet(sheetName);
-        
-        // Define columns
-        sheet.columns = columns.map(c => ({ header: c.header, key: c.key }));
-        
-        // Add data
-        rows.forEach(r => sheet.addRow(r));
-        
-        // Format Header Row
-        const headerRow = sheet.getRow(1);
-        headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } }; // Tailwind Blue 600
-        headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
-        
-        // Auto-fit Columns & Add Borders
-        sheet.columns.forEach((column, index) => {
-            let maxLength = column.header.length;
-            
-            // Calculate max width checking all cells in the column
-            sheet.getColumn(index + 1).eachCell({ includeEmpty: true }, function(cell) {
-                const columnLength = cell.value ? cell.value.toString().length : 0;
-                if (columnLength > maxLength) {
-                    maxLength = columnLength;
-                }
-                
-                // Add borders to all cells
-                cell.border = {
-                    top: {style:'thin', color: {argb:'FFD1D5DB'}},
-                    left: {style:'thin', color: {argb:'FFD1D5DB'}},
-                    bottom: {style:'thin', color: {argb:'FFD1D5DB'}},
-                    right: {style:'thin', color: {argb:'FFD1D5DB'}}
-                };
-            });
-            
-            column.width = Math.min(Math.max(maxLength + 2, 10), 100); // Between 10 and 100
-        });
-
-        // Generate file
-        const buffer = await workbook.xlsx.writeBuffer();
-        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-        
-        // Trigger download
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        
-        setTimeout(() => {
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-        }, 100);
-        
-        showToast(sheetName + ' Exported Successfully!');
-    } catch (e) {
-        console.error("Excel Generation Error:", e);
-        showError("Failed to generate Excel report.");
-    
-        
-    }
+    container.innerHTML = dialerCallLogs.map(log => `
+        <div class="flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all cursor-default">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-500 flex items-center justify-center text-xs">
+                    <i class="fas fa-phone-arrow-up-right"></i>
+                </div>
+                <div>
+                    <div class="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate max-w-[100px]">${log.name}</div>
+                    <div class="text-[9px] text-slate-500">${new Date(log.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                </div>
+            </div>
+            <button onclick="quickDial('${log.phone}')" class="text-blue-500 hover:text-blue-600 p-1">
+                <i class="fas fa-rotate-right text-[10px]"></i>
+            </button>
+        </div>
+    `).join('');
 }
 
-window.exportCandidatesExcel = () => {
-    if (cachedCandidates.length === 0) return showToast("No candidates available to export.", "warning");
-    
-    const columns = [
-        { header: 'ID', key: 'id' },
-        { header: 'Full Name', key: 'name' },
-        { header: 'Email', key: 'email' },
-        { header: 'Phone', key: 'phone' },
-        { header: 'Current Stage', key: 'stage' },
-        { header: 'Source', key: 'source' },
-        { header: 'Resume URL', key: 'resumeUrl' },
-        { header: 'Added Date', key: 'createdAt' }
-    ];
-    
-    const rows = cachedCandidates.map(c => ({
-        id: c.id,
-        name: c.name || 'Unknown',
-        email: c.email || 'N/A',
-        phone: c.phone || 'N/A',
-        stage: c.stage || 'SOURCED',
-        source: c.source || 'Manual/Portal',
-        resumeUrl: c.resumeUrl || 'Not Uploaded',
-        createdAt: c.createdAt ? new Date(c.createdAt.seconds * 1000).toLocaleString() : 'N/A'
-    }));
-    
-    downloadFormattedExcel(`Candidates_Master_Report_${new Date().getTime()}.xlsx`, 'Candidates', columns, rows);
+window.clearCallLogs = () => {
+    dialerCallLogs = [];
+    localStorage.setItem('dialerCallLogs', '[]');
+    renderMiniCallLogs();
 };
 
-window.exportJobsExcel = () => {
-    if (cachedJobs.length === 0) return showToast("No jobs available to export.", "warning");
-    
-    const columns = [
-        { header: 'Job ID', key: 'id' },
-        { header: 'Title', key: 'title' },
-        { header: 'Department', key: 'department' },
-        { header: 'Location', key: 'location' },
-        { header: 'Status', key: 'status' },
-        { header: 'Type', key: 'type' },
-        { header: 'Created Date', key: 'createdAt' }
-    ];
-    
-    const rows = cachedJobs.map(j => ({
-        id: j.id,
-        title: j.title || 'Untitled',
-        department: j.department || 'General',
-        location: j.location || 'Remote',
-        status: j.status || 'Draft',
-        type: j.type || 'Full-time',
-        createdAt: j.createdAt ? new Date(j.createdAt.seconds * 1000).toLocaleDateString() : 'N/A'
-    }));
-    
-    downloadFormattedExcel(`Job_Analytics_Report_${new Date().getTime()}.xlsx`, 'Jobs Analytics', columns, rows);
+function getInitials(name) {
+    if (!name) return "??";
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+}
+
+window.openCandidateModal = () => {
+    const form = document.getElementById('form-candidate');
+    if (form) form.reset();
+    document.getElementById('form-candidate-id').value = '';
+    document.getElementById('modal-candidate-title').innerText = 'Add Candidate';
+    document.getElementById('cand-name-display').innerText = 'New Candidate';
+    document.getElementById('cand-status-display').innerText = 'Draft Mode';
+    if (window.updateInitialsDisplay) window.updateInitialsDisplay('');
+    if (window.setRating) {
+        window.setRating('technical', 0);
+        window.setRating('communication', 0);
+    }
+    if (window.clearResumeSelection) window.clearResumeSelection();
+    openModal('modal-candidate');
 };
 
-window.exportInterviewsExcel = () => {
-    if (cachedInterviews.length === 0) return showToast("No interviews available to export.", "warning");
+window.updateInitialsDisplay = (name) => {
+    const display = document.getElementById('cand-initials-display');
+    if (display) display.innerText = getInitials(name);
+};
+
+window.setRating = (category, value) => {
+    const input = document.getElementById(`cand-${category}-rating`);
+    if (input) input.value = value;
     
-    const columns = [
-        { header: 'Interview ID', key: 'id' },
-        { header: 'Candidate', key: 'candidateName' },
-        { header: 'Type', key: 'type' },
-        { header: 'Scheduled Date', key: 'date' },
-        { header: 'Time', key: 'time' },
-        { header: 'Interviewer', key: 'interviewer' },
-        { header: 'Status', key: 'status' }
-    ];
-    
-    const rows = cachedInterviews.map(i => {
-        const c = cachedCandidates.find(c => c.id === i.candidateId);
-        return {
-            id: i.id,
-            candidateName: c ? c.name : 'Unknown Candidate',
-            type: i.type || 'General',
-            date: i.date || 'To Be Decided',
-            time: i.time || 'TBD',
-            interviewer: i.interviewer || 'Unassigned',
-            status: i.status || 'Scheduled'
-        };
+    // Update UI stars
+    const stars = document.querySelectorAll(`[onclick^="setRating('${category}'"]`);
+    stars.forEach((star, index) => {
+        if (index < value) {
+            star.classList.remove('text-slate-300', 'dark:text-slate-700');
+            star.classList.add('text-amber-400');
+        } else {
+            star.classList.add('text-slate-300', 'dark:text-slate-700');
+            star.classList.remove('text-amber-400');
+        }
     });
-    
-    downloadFormattedExcel(`Interview_Schedule_Report_${new Date().getTime()}.xlsx`, 'Interviews', columns, rows);
 };
 
-window.exportOffersExcel = () => {
-    const offerCandidates = cachedCandidates.filter(c => c.stage === 'OFFER' || c.stage === 'HIRED');
-    if (offerCandidates.length === 0) return showToast("No offer data available to export.", "warning");
-    
-    const columns = [
-        { header: 'Candidate', key: 'name' },
-        { header: 'Email', key: 'email' },
-        { header: 'Stage', key: 'stage' },
-        { header: 'Base Salary', key: 'salary' },
-        { header: 'Joining Date', key: 'joiningDate' },
-        { header: 'Position', key: 'position' },
-        { header: 'Offer Status', key: 'offerStatus' }
-    ];
-    
-    const rows = offerCandidates.map(c => {
-        const od = c.offerDetails || {};
-        return {
-            name: c.name || 'Unknown',
-            email: c.email || 'N/A',
-            stage: c.stage,
-            salary: od.salary || 'Not specified',
-            joiningDate: od.joiningDate || 'Not specified',
-            position: od.position || 'Not specified',
-            offerStatus: od.status || 'Pending'
-        };
-    });
-    
-    downloadFormattedExcel(`Offers_Hires_Report_${new Date().getTime()}.xlsx`, 'Offers & Hires', columns, rows);
+window.openJobModal = () => {
+    const form = document.getElementById('form-job');
+    if (form) form.reset();
+    document.getElementById('form-job-id').value = '';
+    document.getElementById('modal-job-title').innerText = 'Job Configuration';
+    document.getElementById('job-title-display').innerText = 'New Opening';
+    document.getElementById('job-status-display').innerText = 'Drafting Pipeline';
+    const budgetMonthly = document.getElementById('job-budget-monthly-imm');
+    if (budgetMonthly) budgetMonthly.innerText = '';
+    openModal('modal-job');
+};
+
+window.openCompanyModal = () => {
+    const form = document.getElementById('form-company');
+    if (form) form.reset();
+    document.getElementById('form-company-id').value = '';
+    document.getElementById('modal-company-title').innerText = 'Company Profile';
+    document.getElementById('comp-name-display').innerText = 'New Partner';
+    document.getElementById('comp-industry-display').innerText = 'Sector Unassigned';
+    document.getElementById('comp-logo-display').innerHTML = '<i class="fas fa-city"></i>';
+    openModal('modal-company');
+};
+
+window.openInterviewModal = () => {
+    const form = document.getElementById('form-interview');
+    if (form) form.reset();
+    document.getElementById('form-interview-id').value = '';
+    document.getElementById('modal-interview-title').innerText = 'Schedule Interview';
+    document.getElementById('interview-cand-name-display').innerText = 'Candidate Name';
+    document.getElementById('interview-round-display').innerText = 'Round Unassigned';
+    document.getElementById('interview-cand-initials').innerHTML = '<i class="fas fa-user"></i>';
+    document.getElementById('interview-candidate-search').value = '';
+    document.getElementById('interview-candidate-id-hidden').value = '';
+    openModal('modal-interview');
 };

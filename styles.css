@@ -160,7 +160,8 @@ transform: scale(1.08);
 
 .sidebar-collapsed .sidebar-btn {
 justify-content: center;
-padding: 0.75rem 0;
+padding: 0.75rem 0.5rem;
+position: relative; /* Anchor for absolute badges */
 }
 
 .sidebar-collapsed .sidebar-btn i {
@@ -208,6 +209,27 @@ transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 background: var(--accent) !important;
 color: #fff !important;
 box-shadow: 0 4px 14px rgba(59, 130, 246, 0.35);
+}
+
+.sidebar-collapsed .sidebar-item-active {
+width: 44px;
+height: 44px;
+max-width: 44px;
+padding: 0 !important;
+display: flex;
+align-items: center;
+justify-content: center;
+margin: 4px auto; /* Centering and spacing */
+border-radius: 12px;
+}
+
+/* Sidebar Badges in Collapsed Mode */
+.sidebar-collapsed #talent-pool-badge {
+position: absolute;
+top: 6px;
+right: 4px;
+transform: scale(0.85); /* Slightly smaller for icon fit */
+transform-origin: top right;
 }
 
 /* Sidebar hover (non-active) */
@@ -314,32 +336,36 @@ min-width: 0;
 }
 
 /* Apply pill-like styling to all selects (unless opted out with .no-filter-style) */
-select:not(.no-filter-style) {
--webkit-appearance: none;
-appearance: none;
-background: var(--input-bg);
-border: 1px solid transparent;
-padding: 0.45rem 2.6rem 0.45rem 0.9rem;
-/* leave room on right for chevron */
-border-radius: 9999px;
-font-size: 0.95rem;
-color: var(--text-primary);
-box-shadow: 0 2px 8px rgba(2, 6, 23, 0.04);
-background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'><path d='M6 8l4 4 4-4' stroke='%23343A40' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
-background-repeat: no-repeat;
-background-position: right 0.9rem center;
-transition: box-shadow 0.12s, transform 0.05s, border-color 0.12s, background 0.12s;
+select:not(.no-filter-style), select.theme-input {
+    -webkit-appearance: none;
+    appearance: none;
+    background-color: var(--input-bg);
+    border: 1px solid var(--input-border);
+    padding: 0.5rem 2.2rem 0.5rem 0.8rem;
+    border-radius: 0.75rem;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none'><path d='M6 8l4 4 4-4' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 0.7rem center;
+    background-size: 1rem;
+    transition: all 0.2s ease;
+    cursor: pointer;
 }
 
-select:not(.no-filter-style):hover {
-background-color: rgba(59, 130, 246, 0.03);
+.dark select:not(.no-filter-style), .dark select.theme-input {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none'><path d='M6 8l4 4 4-4' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>");
 }
 
-select:not(.no-filter-style):focus {
+select:not(.no-filter-style):hover, select.theme-input:hover {
+border-color: var(--accent);
+background-color: var(--bg-tertiary);
+}
+
+select:not(.no-filter-style):focus, select.theme-input:focus {
 outline: none;
-border-color: rgba(59, 130, 246, 0.18);
-box-shadow: 0 8px 30px rgba(59, 130, 246, 0.06);
-transform: translateY(-1px);
+border-color: var(--accent);
+box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
 /* Custom select component styles (used to replace native select popup) */
@@ -1241,5 +1267,628 @@ overflow: hidden;
 }
 
 .modal-box .custom-scrollbar::-webkit-scrollbar {
-width: 4px;
+    width: 4px;
 }
+
+/* ===================== INTERVIEW LIST: ROW DESIGN ===================== */
+.interview-row {
+    display: grid;
+    grid-template-columns: 100px 1fr 200px 140px;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 1.25rem 2rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 1.5rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.interview-row:hover {
+    transform: translateX(6px);
+    background: var(--bg-tertiary);
+    border-color: var(--accent-light);
+    box-shadow: 0 10px 30px -10px rgba(59, 130, 246, 0.1);
+}
+
+.interview-date-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding-right: 1.5rem;
+    border-right: 1px solid var(--border-color);
+}
+
+.date-day {
+    font-size: 1.5rem;
+    font-weight: 900;
+    line-height: 1;
+    color: var(--text-primary);
+}
+
+.date-month {
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+}
+
+.interview-main-col {
+    min-width: 0;
+}
+
+.interview-candidate-name {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.interview-job-info {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.interview-meta-col {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.interview-actions-col {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+.btn-action-round {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+}
+
+.btn-action-round:hover {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+    transform: translateY(-2px);
+}
+
+.date-divider {
+    padding: 2rem 0 1rem 1rem;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.date-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(to right, var(--border-color), transparent);
+}
+
+.date-divider span {
+    font-size: 0.7rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--accent);
+}
+
+/* Pulsing Live Indicator */
+.indicator-live {
+    width: 8px;
+    height: 8px;
+    background: #10b981;
+    border-radius: 50%;
+    position: relative;
+}
+
+.indicator-live::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: inherit;
+    border-radius: 50%;
+    animation: pulse-ring 1.5s infinite;
+}
+
+@keyframes pulse-ring {
+    0% { transform: scale(1); opacity: 0.8; }
+    100% { transform: scale(3.5); opacity: 0; }
+}
+
+@media (max-width: 1024px) {
+    .interview-row {
+        grid-template-columns: 1fr;
+        padding: 1.5rem;
+    }
+    .interview-date-col {
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+        padding-right: 0;
+        padding-bottom: 1rem;
+        flex-direction: row;
+        gap: 1.5rem;
+    }
+}
+
+/* ===================== CALENDAR VIEW ===================== */
+.interview-calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    background-color: var(--border-color);
+    gap: 1px;
+    border: 1px solid var(--border-color);
+    border-radius: 1.5rem;
+    overflow: hidden;
+}
+
+.calendar-day-header {
+    background: var(--bg-tertiary);
+    padding: 1rem 0.5rem;
+    text-align: center;
+    font-size: 0.65rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--text-muted);
+}
+
+.calendar-day-cell {
+    min-height: 120px;
+    background: var(--bg-secondary);
+    padding: 0.75rem;
+    transition: all 0.2s;
+}
+
+.calendar-day-cell:hover {
+    background: var(--bg-tertiary);
+}
+
+.calendar-day-cell.is-today {
+    background: rgba(59, 130, 246, 0.05);
+}
+
+.calendar-day-cell.is-today .day-number {
+    color: var(--accent);
+}
+
+.calendar-day-cell .day-number {
+    font-size: 0.85rem;
+    font-weight: 800;
+    color: var(--text-secondary);
+}
+
+.calendar-interview-bubble {
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 0.4rem 0.6rem;
+    margin-top: 0.4rem;
+    background: var(--accent);
+    color: white;
+    border-radius: 0.6rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+}
+
+/* ===================== IMMERSIVE MODALS ===================== */
+.modal-box-wide {
+    width: 95vw;
+    height: 95vh;
+    max-width: 1400px;
+    background: var(--bg-secondary);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border-color);
+    border-radius: 2rem;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 50px 100px -20px rgba(0, 0, 0, 0.5);
+}
+
+.modal-header-sticky {
+    padding: 1.5rem 2.5rem;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.modal-body-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 2.5rem;
+}
+
+.modal-footer-sticky {
+    padding: 1.5rem 2.5rem;
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    flex-shrink: 0;
+}
+
+.form-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+}
+
+/* Form Sections */
+.form-section-header {
+    margin-top: 2.5rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: fit-content;
+}
+
+.form-section-header i {
+    color: var(--accent);
+    font-size: 1.1rem;
+}
+
+.form-section-header h4 {
+    font-size: 0.9rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-primary);
+}
+
+/* ===================== DIALER UI ===================== */
+.dialer-container {
+    max-width: 360px;
+    margin: 0 auto;
+    background: var(--bg-secondary);
+    border-radius: 2.5rem;
+    padding: 2.5rem;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-xl);
+}
+
+.dialer-screen {
+    background: var(--bg-tertiary);
+    border-radius: 1.5rem;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    text-align: right;
+    min-height: 80px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    border: 1px solid var(--border-color);
+    box-shadow: inset 0 2px 10px rgba(0,0,0,0.2);
+}
+
+.dialer-screen .number {
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    letter-spacing: 0.05em;
+}
+
+.dialer-screen .name {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: 0.25rem;
+}
+
+.dialer-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.25rem;
+}
+
+.dial-btn {
+    aspect-ratio: 1/1;
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dial-btn:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    transform: scale(1.05);
+    box-shadow: 0 10px 20px rgba(59, 130, 246, 0.3);
+}
+
+.dial-btn:hover span {
+    color: white;
+}
+
+.dial-btn:active {
+    transform: scale(0.95);
+}
+
+.dial-btn span.digit {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--text-primary);
+}
+
+.dial-btn span.sub {
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.call-btn-main {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: #10b981;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    box-shadow: 0 10px 25px rgba(16, 185, 129, 0.4);
+    transition: all 0.3s;
+    margin: 2rem auto 0;
+}
+
+.call-btn-main:hover {
+    transform: scale(1.1) rotate(15deg);
+    filter: brightness(1.1);
+}
+
+.contact-row-action {
+    padding: 0.5rem;
+    border-radius: 0.75rem;
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+    transition: all 0.2s;
+}
+
+.contact-row-action:hover {
+    background: var(--accent);
+    color: white;
+    transform: translateY(-2px);
+}
+/* ===================== DIALER & CONTACTS ===================== */
+.dialpad-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 4rem;
+    width: 100%;
+    border-radius: 1rem;
+    font-size: 1.5rem;
+    font-weight: 900;
+    transition: all 0.2s;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.dark .dialpad-btn {
+    background: rgba(30, 41, 59, 0.4);
+    border-color: rgba(255, 255, 255, 0.05);
+}
+
+.dialpad-btn:hover {
+    background: #3b82f6;
+    color: white;
+    border-color: #3b82f6;
+    transform: scale(1.05);
+}
+
+.dialpad-btn:active {
+    transform: scale(0.95);
+}
+
+.dialpad-sub {
+    font-size: 0.5rem;
+    font-weight: 700;
+    opacity: 0.4;
+    margin-top: -0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.dialpad-btn:hover .dialpad-sub {
+    opacity: 0.8;
+    color: white;
+}
+
+.contact-row {
+    transition: all 0.3s;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.contact-row:hover {
+    background: rgba(59, 130, 246, 0.05);
+}
+
+.contact-avatar {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    color: white;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.action-btn-circle {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.action-btn-circle:hover {
+    transform: scale(1.1);
+}
+
+.action-btn-circle:active {
+    transform: scale(0.9);
+}
+
+/* ===================== IMMERSIVE WORKSPACE ===================== */
+.immersive-workspace {
+    position: fixed;
+    inset: 1rem;
+    z-index: 150;
+    background: var(--bg-secondary);
+    border-radius: 2.5rem;
+    box-shadow: 0 0 100px rgba(0,0,0,0.3);
+    border: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    width: 95vw;
+    height: 95vh;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.workspace-header {
+    height: 5rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2.5rem;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.5);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.dark .workspace-header {
+    background: rgba(15, 23, 42, 0.5);
+}
+
+.workspace-body {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+.workspace-sidebar {
+    width: 20rem;
+    border-right: 1px solid var(--border-color);
+    padding: 2rem;
+    overflow-y: auto;
+    flex-shrink: 0;
+    background: rgba(248, 250, 252, 0.3);
+}
+
+.dark .workspace-sidebar {
+    background: rgba(15, 23, 42, 0.3);
+}
+
+.workspace-content {
+    flex: 1;
+    padding: 2.5rem;
+    overflow-y: auto;
+    background: var(--bg-secondary);
+}
+
+.workspace-actions {
+    width: 20rem;
+    border-left: 1px solid var(--border-color);
+    padding: 2rem;
+    overflow-y: auto;
+    flex-shrink: 0;
+    background: rgba(248, 250, 252, 0.3);
+}
+
+.dark .workspace-actions {
+    background: rgba(15, 23, 42, 0.3);
+}
+
+.form-group-card {
+    background: rgba(248, 250, 252, 0.5);
+    border-radius: 1.5rem;
+    padding: 1.5rem;
+    border: 1px solid var(--border-color);
+    margin-bottom: 1.5rem;
+    transition: all 0.3s;
+}
+
+.dark .form-group-card {
+    background: rgba(30, 41, 59, 0.3);
+}
+
+.form-group-card:hover {
+    border-color: rgba(59, 130, 246, 0.3);
+}
+
+.field-label {
+    display: block;
+    font-size: 0.625rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+    margin-left: 0.25rem;
+}
+
+.rating-star {
+    color: #cbd5e1;
+    cursor: pointer;
+    transition: color 0.2s;
+    font-size: 1.25rem;
+}
+
+.rating-star:hover {
+    color: #fbbf24;
+}
+
+.rating-star.active {
+    color: #f59e0b;
+}
+
