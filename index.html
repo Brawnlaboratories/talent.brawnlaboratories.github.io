@@ -78,6 +78,7 @@
             flex-direction: column-reverse;
             align-items: flex-end;
             gap: 1rem;
+            pointer-events: none;
         }
 
         .fab-main {
@@ -94,6 +95,7 @@
             transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             border: none;
             outline: none;
+            pointer-events: auto;
         }
 
         .fab-main.active {
@@ -2371,10 +2373,17 @@
                             </div>
                         </div>
 
-                        <div>
-                            <label class="field-label">Applied For Job</label>
-                            <select id="candidate-job-select" name="jobId" required
-                                class="theme-input searchable-select"></select>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="field-label">Department</label>
+                                <select id="candidate-job-dept-select" name="jobDepartment" class="theme-input searchable-select"></select>
+                            </div>
+
+                            <div>
+                                <label class="field-label">Applied For Job</label>
+                                <select id="candidate-job-select" name="jobId" required
+                                    class="theme-input searchable-select"></select>
+                            </div>
                         </div>
 
                         <div>

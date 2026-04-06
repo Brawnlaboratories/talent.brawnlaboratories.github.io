@@ -1647,8 +1647,6 @@ function renderCandidates() {
                         <td class="px-6 py-4 text-right border-b border-slate-200 dark:border-slate-800">
                             <div class="flex gap-2 justify-end opacity-0 group-hover:opacity-100 transition">
                                 <button onclick="showCandidateProfile('${c.id}')" class="p-2 text-slate-400 hover:text-emerald-500 dark:hover:text-emerald-400 bg-slate-100 dark:bg-slate-800/80 rounded shadow-sm" title="View Profile"><i class="fas fa-eye"></i></button>
-                                ${c.resumeUrl ? `<button onclick="previewResume('${c.resumeUrl}')" class="p-2 text-blue-500 hover:text-blue-600 bg-blue-50 dark:bg-blue-900/30 rounded shadow-sm" title="View Resume Internally"><i class="fas fa-file-pdf"></i></button>` : ''}
-                                <button onclick="toggleContactStatus('${c.id}')" class="p-2 text-${c.isContact ? 'amber' : 'blue'}-500 hover:text-${c.isContact ? 'amber' : 'blue'}-600 bg-${c.isContact ? 'amber' : 'blue'}-50 dark:bg-${c.isContact ? 'amber' : 'blue'}-900/30 rounded shadow-sm" title="${c.isContact ? 'Remove from contacts' : 'Save to contacts'}"><i class="fas ${c.isContact ? 'fa-user-minus' : 'fa-user-plus'}"></i></button>
                                 <button onclick="editCandidate('${c.id}')" class="p-2 text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 bg-slate-100 dark:bg-slate-800/80 rounded shadow-sm" title="Edit Profile"><i class="fas fa-edit"></i></button>
                                 <button onclick="deleteDocById('candidates', '${c.id}')" class="p-2 text-slate-400 hover:text-red-500 dark:hover:text-red-400 bg-slate-100 dark:bg-slate-800/80 rounded shadow-sm" title="Delete Candidate"><i class="fas fa-trash-alt"></i></button>
                             </div>
@@ -1698,7 +1696,6 @@ function renderCandidates() {
                     <div class="flex items-center justify-between mt-3">
                         <div class="flex items-center gap-2">
                             <button onclick="showCandidateProfile('${c.id}')" class="px-3 py-1 rounded bg-emerald-50 text-emerald-600 hover:bg-emerald-100 flex items-center gap-1 text-xs"><i class="fas fa-eye text-[10px]"></i> View</button>
-                            ${c.resumeUrl ? `<button onclick="previewResume('${c.resumeUrl}')" class="px-3 py-1 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center gap-1 text-xs"><i class="fas fa-file-pdf text-[10px]"></i> CV</button>` : ''}
                             <button onclick="editCandidate('${c.id}')" class="px-3 py-1 rounded bg-slate-100 hover:bg-slate-200 text-xs text-slate-600">Edit</button>
                             <button onclick="deleteDocById('candidates', '${c.id}')" class="px-3 py-1 rounded bg-red-50 hover:bg-red-100 text-red-600 text-xs">Delete</button>
                         </div>
@@ -4061,12 +4058,15 @@ window.populateCandidateJobs = function (department, includeJobId = null) {
         placeholderJob.selected = true;
         placeholderJob.text = '-- Select Job --';
         jobSelect.appendChild(placeholderJob);
+        // Sync with custom UI
+        try { initCustomSelects(); } catch (e) {}
         return;
     }
 
     const jobsToShow = activeJobsForDropdown.filter(j => {
         return (j.department || '').toString() === department;
     });
+
     const prev = jobSelect.value;
     jobSelect.innerHTML = '';
     const placeholderJob = document.createElement('option');
@@ -4077,7 +4077,7 @@ window.populateCandidateJobs = function (department, includeJobId = null) {
     jobSelect.appendChild(placeholderJob);
 
     if (jobsToShow.length === 0) {
-        const none = document.createElement('option'); none.value = ''; none.disabled = true; none.text = 'No active jobs in this department'; jobSelect.appendChild(none);
+        const none = document.createElement('option'); none.value = ''; none.disabled = true; none.text = 'No active jobs available'; jobSelect.appendChild(none);
     } else {
         jobsToShow.forEach(j => {
             const opt = document.createElement('option'); opt.value = j.id; opt.text = j.title || j.id; jobSelect.appendChild(opt);
@@ -5463,9 +5463,6 @@ window.showCandidateProfile = (id) => {
     const sidebarActions = document.getElementById('profile-sidebar-actions');
     if (sidebarActions) {
         sidebarActions.innerHTML = `
-            <button onclick="toggleContactStatus('${c.id}')" class="w-full py-3 ${c.isContact ? 'bg-slate-200 text-slate-800' : 'bg-blue-100 text-blue-700'} rounded-xl font-bold flex items-center justify-center gap-2 transition-all">
-                <i class="fas ${c.isContact ? 'fa-user-minus' : 'fa-user-plus'}"></i> ${c.isContact ? 'Remove Contact' : 'Save to Contacts'}
-            </button>
             <button onclick="initiateRemoteCall('${c.phone}', '${c.name.replace(/'/g, "\\'")}')" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-500/20">
                 <i class="fas fa-phone"></i> Call Now
             </button>
@@ -5483,23 +5480,6 @@ window.showCandidateProfile = (id) => {
     if (content) {
         content.innerHTML = `
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Resume Card -->
-                ${c.resumeUrl ? `
-                <div class="col-span-full form-group-card border-dashed border-blue-200 bg-blue-50/20">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-4">
-                            <div class="w-12 h-12 rounded-xl bg-blue-600 flex items-center justify-center text-white">
-                                <i class="fas fa-file-pdf text-xl"></i>
-                            </div>
-                            <div>
-                                <p class="text-sm font-bold text-slate-800 dark:text-slate-200">Curriculum Vitae</p>
-                                <p class="text-xs text-slate-500">Applicant Resume is encrypted and stored</p>
-                            </div>
-                        </div>
-                        <button onclick="previewResume('${c.resumeUrl}')" class="px-6 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-500/30 hover:scale-105 transition-transform">Preview Resume</button>
-                    </div>
-                </div>` : ''}
-
                 <!-- Stats Cards -->
                 <div class="form-group-card">
                     <h5 class="field-label">Professional Experience</h5>
@@ -5559,6 +5539,29 @@ window.showCandidateProfile = (id) => {
                     <h5 class="field-label">Screener Notes</h5>
                     <p class="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap leading-relaxed">${c.screenerNotes || 'No internal notes available for this candidate.'}</p>
                 </div>
+
+                <!-- Resume Card -->
+                ${c.resumeUrl ? (function() {
+                    const lUrl = c.resumeUrl.toLowerCase().split('?')[0];
+                    const isViewable = lUrl.endsWith('.pdf') || lUrl.endsWith('.jpg') || lUrl.endsWith('.jpeg') || lUrl.endsWith('.png') || lUrl.endsWith('.webp') || lUrl.includes('/raw/upload/') || lUrl.includes('application/pdf');
+                    if (!isViewable) {
+                         return `<div class="col-span-full form-group-card border-dashed border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                             <div class="flex flex-col items-center justify-center py-6">
+                                <i class="fas fa-file-circle-exclamation text-3xl text-slate-400 mb-3"></i>
+                                <p class="text-sm font-bold text-slate-600 dark:text-slate-300">Preview not available for this format</p>
+                                <a href="${c.resumeUrl}" target="_blank" class="mt-3 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs transition">Download Resume</a>
+                             </div>
+                         </div>`;
+                    }
+                    const viewerSrc = lUrl.endsWith('.pdf') ? `https://docs.google.com/gview?url=${encodeURIComponent(c.resumeUrl)}&embedded=true` : c.resumeUrl;
+                    return `<div class="col-span-full form-group-card !p-0 overflow-hidden border-slate-200 dark:border-slate-700 shadow-sm">
+                        <div class="bg-slate-50 dark:bg-slate-800/80 p-4 flex justify-between items-center border-b border-slate-100 dark:border-slate-700">
+                            <div class="flex items-center gap-2 font-bold text-sm text-slate-800 dark:text-slate-200"><i class="fas fa-file-lines text-blue-500"></i> Resume Preview</div>
+                            <a href="${c.resumeUrl}" target="_blank" class="px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-lg font-bold text-xs transition inline-flex items-center gap-1.5"><i class="fas fa-external-link-alt"></i> Open Original</a>
+                        </div>
+                        <iframe src="${viewerSrc}" class="w-full h-[600px] border-none bg-slate-100 dark:bg-slate-900" allowfullscreen></iframe>
+                    </div>`;
+                })() : ''}
             </div>
         `;
     }
