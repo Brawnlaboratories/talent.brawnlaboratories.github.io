@@ -1420,6 +1420,10 @@
                                     outcomes</p>
                             </div>
                             <div class="flex gap-3">
+                                <button onclick="openInterviewModal()"
+                                    class="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl text-xs font-bold flex items-center gap-2 transition-all shadow-sm">
+                                    <i class="fa-solid fa-calendar-plus"></i> Schedule Interview
+                                </button>
                                 <button onclick="openInterviewsCalendar()"
                                     class="px-5 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-bold flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm">
                                     <i class="fa-solid fa-calendar-days text-blue-500"></i> Calendar
@@ -2885,7 +2889,7 @@
                                 </div>
                                 <div class="col-span-full">
                                     <label class="field-label">Meeting Link / Physical Venue</label>
-                                    <input type="url" id="interview-meeting-link" name="meetingLink" class="theme-input"
+                                    <input type="text" id="interview-meeting-link" name="meetingLink" class="theme-input"
                                         placeholder="https://zoom.us/j/... or Office Address">
                                 </div>
                             </div>

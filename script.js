@@ -1246,7 +1246,7 @@ function setupRealtimeListeners() {
     }, (error) => handleError("Candidates", error));
 
     // Listen for Interviews
-    const interviewQuery = query(collection(db, "interviews"), orderBy("createdAt", "desc"), limit(300));
+    const interviewQuery = query(collection(db, "interviews"), limit(300));
     onSnapshot(interviewQuery, (snapshot) => {
         logSource("Interviews", snapshot);
         cachedInterviews = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -2328,12 +2328,14 @@ function exportArchiveCSV() {
 
 function renderInterviews() {
     const container = document.getElementById('interviews-list');
+    if (!container) return;
     const q = getEffectiveQuery('interviews');
     const qnorm = q ? q.toLowerCase() : '';
 
     // 1. Filter interviews
     let filtered = cachedInterviews.filter(i => {
         const cand = cachedCandidates.find(c => c.id === i.candidateId);
+        if (!cand && !qnorm) return true;
         if (!cand) return false;
         if (!qnorm) return true;
         const job = cachedJobs.find(j => j.id === cand.jobId);
@@ -2358,10 +2360,14 @@ function renderInterviews() {
     const successRate = totalInterviews > 0 ? Math.round((selectedInterviews / totalInterviews) * 100) : 0;
 
     // Update analytics display
-    document.getElementById('interview-total').innerText = totalInterviews;
-    document.getElementById('interview-this-week').innerText = thisWeekInterviews;
-    document.getElementById('interview-selected').innerText = selectedInterviews;
-    document.getElementById('interview-success-rate').innerText = `${successRate}%`;
+    const totalEl = document.getElementById('interview-total');
+    const weekEl = document.getElementById('interview-this-week');
+    const selectedEl = document.getElementById('interview-selected');
+    const rateEl = document.getElementById('interview-success-rate');
+    if (totalEl) totalEl.innerText = totalInterviews;
+    if (weekEl) weekEl.innerText = thisWeekInterviews;
+    if (selectedEl) selectedEl.innerText = selectedInterviews;
+    if (rateEl) rateEl.innerText = `${successRate}%`;
 
     if (filtered.length === 0) {
         container.innerHTML = `
@@ -3570,9 +3576,20 @@ document.getElementById('form-interview').onsubmit = async (e) => {
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
 
+        const searchValue = document.getElementById('interview-candidate-search')?.value || '';
+        if (!data.candidateId && searchValue) syncInterviewCandidateId(searchValue);
         const candidateId = data.candidateId || document.getElementById('interview-candidate-id-hidden').value;
+        if (!candidateId) {
+            showToast("Please choose a candidate from the search list.");
+            return;
+        }
         const cand = cachedCandidates.find(c => c.id === candidateId);
+        if (!cand) {
+            showToast("Selected candidate could not be found. Refresh and try again.");
+            return;
+        }
         const currentStage = cand ? cand.stage || "Applied" : "Applied";
+        data.candidateId = candidateId;
 
         const editId = data.id;
         delete data.id;
@@ -3587,11 +3604,14 @@ document.getElementById('form-interview').onsubmit = async (e) => {
         }
 
         if (editId) {
+            data.updatedAt = serverTimestamp();
             await updateDoc(doc(db, "interviews", editId), data);
             showToast("Interview Updated!");
         } else {
             // Save the stage before this interview was scheduled
             data.previousStage = currentStage;
+            data.createdAt = serverTimestamp();
+            data.updatedAt = serverTimestamp();
             await addDoc(collection(db, "interviews"), data);
             showToast("Interview Scheduled!");
         }
@@ -3732,16 +3752,29 @@ window.handleInterviewCandidateSearch = (val) => {
     list.innerHTML = matches.map(c =>
         `<option value="${c.name} | ${c.phone || ''} | ${c.email || ''}" data-id="${c.id}">`
     ).join('');
+
+    syncInterviewCandidateId(val);
 };
 
 window.syncInterviewCandidateId = (val) => {
     const list = document.getElementById('candidate-search-list');
     if (!list) return;
 
+    const input = (val || '').trim().toLowerCase();
     let option = Array.from(list.options).find(opt => opt.value === val);
-    if (!option) {
-        // fallback: match by name prefix if the user typed the displaytext
-        option = Array.from(list.options).find(opt => (opt.value || '').toLowerCase().startsWith((val || '').toLowerCase()));
+    if (!option && input) option = Array.from(list.options).find(opt => (opt.value || '').toLowerCase().startsWith(input));
+    if (!option && input) {
+        const cand = cachedCandidates.find(c =>
+            (c.name || '').toLowerCase() === input ||
+            (c.name || '').toLowerCase().startsWith(input) ||
+            (c.email || '').toLowerCase() === input ||
+            String(c.phone || '').replace(/\D/g, '') === input.replace(/\D/g, '')
+        );
+        if (cand) {
+            option = document.createElement('option');
+            option.value = `${cand.name} | ${cand.phone || ''} | ${cand.email || ''}`;
+            option.setAttribute('data-id', cand.id);
+        }
     }
 
     if (option) {
