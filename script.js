@@ -77,8 +77,8 @@ window.renderOfferTemplates = () => {
     const tbody = document.querySelector('#offer-template-list tbody');
     if (!tbody) return;
     if (!cachedOfferTemplates || cachedOfferTemplates.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-slate-400 py-4">No templates uploaded yet.</td></tr>';
-        document.getElementById('selected-offer-template-name').innerText = 'None';
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-slate-400 py-4">No templates added yet. Paste a GitHub/raw PDF URL to begin.</td></tr>';
+        updateSelectedOfferTemplateSummary(null);
         selectedOfferTemplateId = null;
         return;
     }
@@ -86,15 +86,18 @@ window.renderOfferTemplates = () => {
     tbody.innerHTML = cachedOfferTemplates.map(template => {
         const isActive = selectedOfferTemplateId === template.id;
         const fieldsCount = template.fields ? template.fields.length : 0;
+        const sourceLabel = getOfferTemplateSourceLabel(template);
         return `
             <tr class="${isActive ? 'bg-blue-100 dark:bg-blue-900/40' : ''}">
                 <td class="px-2 py-2 text-[11px]">${escapeHtml(template.name || template.label || 'Untitled')}</td>
+                <td class="px-2 py-2 text-[11px]"><span class="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300">${sourceLabel}</span></td>
                 <td class="px-2 py-2 text-[11px]">${template.type || (fieldsCount ? 'AcroForm' : 'Static')}</td>
                 <td class="px-2 py-2 text-[11px]">${fieldsCount}</td>
                 <td class="px-2 py-2 text-[11px] flex gap-1 flex-wrap">
                     <button class="px-2 py-1 bg-blue-600 text-white rounded-lg text-[10px]" onclick="selectOfferTemplate('${template.id}')">Select</button>
                     <button class="px-2 py-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-100 rounded-lg text-[10px]" onclick="previewOfferTemplate('${template.url}')">Preview</button>
                     <button class="px-2 py-1 bg-indigo-600 text-white rounded-lg text-[10px]" onclick="openOfferTemplateMapper('${template.id}')">Map</button>
+                    <button class="px-2 py-1 bg-emerald-600 text-white rounded-lg text-[10px]" onclick="copyOfferTemplateUrl('${template.id}')">Copy URL</button>
                     <button class="px-2 py-1 bg-red-500 text-white rounded-lg text-[10px]" onclick="deleteOfferTemplate('${template.id}')">Delete</button>
                 </td>
             </tr>
@@ -102,7 +105,7 @@ window.renderOfferTemplates = () => {
     }).join('');
 
     const sel = cachedOfferTemplates.find(t => t.id === selectedOfferTemplateId);
-    document.getElementById('selected-offer-template-name').innerText = sel ? sel.name : 'None';
+    updateSelectedOfferTemplateSummary(sel);
 };
 
 window.selectOfferTemplate = (id) => {
@@ -110,9 +113,73 @@ window.selectOfferTemplate = (id) => {
     renderOfferTemplates();
 };
 
+function normalizePdfTemplateUrl(input) {
+    const raw = String(input || '').trim();
+    if (!raw) return '';
+
+    let parsed;
+    try {
+        parsed = new URL(raw);
+    } catch (e) {
+        throw new Error('Enter a valid PDF URL.');
+    }
+
+    if (parsed.hostname === 'github.com') {
+        const parts = parsed.pathname.split('/').filter(Boolean);
+        if (parts.length >= 5 && (parts[2] === 'blob' || parts[2] === 'raw')) {
+            return `https://raw.githubusercontent.com/${parts[0]}/${parts[1]}/${parts.slice(3).join('/')}`;
+        }
+    }
+
+    if (parsed.hostname === 'raw.githubusercontent.com' || parsed.hostname.endsWith('.github.io')) {
+        return parsed.href;
+    }
+
+    return parsed.href;
+}
+
+function getOfferTemplateSourceLabel(template) {
+    const source = template?.sourceType || '';
+    const url = template?.url || '';
+    if (source === 'github' || url.includes('raw.githubusercontent.com') || url.includes('github.com') || url.includes('github.io')) return 'GitHub';
+    if (source === 'cloudinary' || url.includes('cloudinary.com')) return 'Cloudinary';
+    if (source === 'url') return 'URL';
+    return 'Template';
+}
+
+function updateOfferTemplateStatus(message, tone = 'success') {
+    const el = document.getElementById('offer-template-status');
+    if (!el) return;
+    el.textContent = message || '';
+    el.classList.toggle('hidden', !message);
+    el.classList.toggle('text-red-600', tone === 'error');
+    el.classList.toggle('text-emerald-600', tone !== 'error');
+}
+
+function updateSelectedOfferTemplateSummary(template) {
+    const nameEl = document.getElementById('selected-offer-template-name');
+    const sourceEl = document.getElementById('selected-offer-template-source');
+    const pagesEl = document.getElementById('selected-offer-template-pages');
+    if (nameEl) nameEl.innerText = template ? (template.name || 'Untitled') : 'None';
+    if (sourceEl) sourceEl.innerText = template ? getOfferTemplateSourceLabel(template) : 'None';
+    if (pagesEl) pagesEl.innerText = template ? (template.pageCount || '-') : '-';
+}
+
 window.previewOfferTemplate = (url) => {
     if (!url) return;
     window.open(url, '_blank');
+};
+
+window.copyOfferTemplateUrl = async (id) => {
+    const template = cachedOfferTemplates.find(t => t.id === id);
+    if (!template?.url) return showToast('Template URL not available.');
+    try {
+        await navigator.clipboard.writeText(template.url);
+        showToast('Template URL copied.');
+    } catch (e) {
+        updateOfferTemplateStatus(template.url);
+        showToast('Copy blocked. URL shown below the template list.');
+    }
 };
 
 window.deleteOfferTemplate = async (id) => {
@@ -142,15 +209,19 @@ window.handleOfferTemplateUpload = async (event) => {
         const publicId = `offer_template_${now.getTime()}`;
         const url = await uploadResumeToCloudinary(file, publicId);
 
-        const fields = await window.pdfService.getTemplateFields(url);
+        const info = await window.pdfService.getTemplateInfo(url);
+        const fields = info.fields || [];
         const type = fields.length > 0 ? 'AcroForm' : 'Static';
 
         await addDoc(collection(db, 'offerTemplates'), {
             name: file.name,
             url,
+            sourceType: 'cloudinary',
             createdAt: serverTimestamp(),
             type,
             fields,
+            pageCount: info.pageCount || 0,
+            pageSize: info.pageSize || null,
             updatedAt: serverTimestamp()
         });
 
@@ -160,6 +231,59 @@ window.handleOfferTemplateUpload = async (event) => {
     } catch (e) {
         console.error('Template upload error', e);
         showToast('Template uploads failed.');
+    }
+};
+
+window.addOfferTemplateFromUrl = async () => {
+    const urlInput = document.getElementById('offer-template-url-input');
+    const nameInput = document.getElementById('offer-template-name-input');
+    const originalUrl = urlInput?.value || '';
+
+    let url = '';
+    try {
+        url = normalizePdfTemplateUrl(originalUrl);
+    } catch (e) {
+        updateOfferTemplateStatus(e.message, 'error');
+        showToast(e.message);
+        return;
+    }
+
+    if (!url.toLowerCase().split('?')[0].endsWith('.pdf')) {
+        updateOfferTemplateStatus('Use a direct PDF URL. GitHub blob links are accepted and converted automatically.', 'error');
+        showToast('Please use a PDF URL.');
+        return;
+    }
+
+    try {
+        updateOfferTemplateStatus('Checking PDF URL and reading fields...');
+        const info = await window.pdfService.getTemplateInfo(url);
+        const fields = info.fields || [];
+        const type = fields.length > 0 ? 'AcroForm' : 'Static';
+        const urlName = decodeURIComponent(url.split('/').pop().split('?')[0] || 'PDF Template');
+
+        const docRef = await addDoc(collection(db, 'offerTemplates'), {
+            name: (nameInput?.value || '').trim() || urlName,
+            url,
+            originalUrl: originalUrl.trim(),
+            sourceType: url.includes('github') || url.includes('githubusercontent') ? 'github' : 'url',
+            createdAt: serverTimestamp(),
+            type,
+            fields,
+            pageCount: info.pageCount || 0,
+            pageSize: info.pageSize || null,
+            updatedAt: serverTimestamp()
+        });
+
+        selectedOfferTemplateId = docRef.id;
+        if (urlInput) urlInput.value = '';
+        if (nameInput) nameInput.value = '';
+        updateOfferTemplateStatus(`Template added from ${url.includes('githubusercontent') ? 'GitHub' : 'URL'} (${type}, ${info.pageCount || 0} page${info.pageCount === 1 ? '' : 's'}).`);
+        showToast('Template added.');
+        await loadOfferTemplates();
+    } catch (e) {
+        console.error('Template URL add failed', e);
+        updateOfferTemplateStatus('Could not read that PDF URL. Make sure the GitHub repo/file is public and the raw file is accessible.', 'error');
+        showToast('Template URL failed.');
     }
 };
 
@@ -307,30 +431,95 @@ window.previewOfferDocument = async (offerId) => {
     }
 };
 
-window.generatePdfFromCandidate = async () => {
+function getPdfFillerContext() {
     const templateId = selectedOfferTemplateId;
-    if (!templateId) return showToast('Please select a template first.');
+    if (!templateId) {
+        showToast('Please select a template first.');
+        return null;
+    }
 
     const template = cachedOfferTemplates.find(t => t.id === templateId);
-    if (!template) return showToast('Template not available');
+    if (!template) {
+        showToast('Template not available');
+        return null;
+    }
 
     const candidateId = document.getElementById('pdf-filler-candidate-select').value;
-    if (!candidateId) return showToast('Please select a candidate.');
+    if (!candidateId) {
+        showToast('Please select a candidate.');
+        return null;
+    }
 
     const candidate = cachedCandidates.find(c => c.id === candidateId);
-    if (!candidate) return showToast('Candidate not found.');
+    if (!candidate) {
+        showToast('Candidate not found.');
+        return null;
+    }
 
     const job = cachedJobs.find(j => j.id === candidate.jobId) || {};
     const fillData = window.buildOfferData({}, candidate, job); // empty offer, since no offer data
+    return { template, candidate, fillData };
+}
 
+async function buildPdfFromFillerContext(context) {
+    const options = { coordMap: context.template.coordinateMap || {} };
+    return await window.pdfService.fillPdfForm(context.template.url, context.fillData, options);
+}
+
+function getGeneratedPdfName(candidate, suffix = 'document') {
+    return `${(candidate.name || 'candidate').replace(/[\\/:*?"<>|]+/g, '_')}_${suffix}.pdf`;
+}
+
+window.generatePdfFromCandidate = async () => {
+    const context = getPdfFillerContext();
+    if (!context) return;
     try {
-        const options = { coordMap: template.coordinateMap || {} };
-        const pdfBlob = await window.pdfService.fillPdfForm(template.url, fillData, options);
-        window.pdfService.downloadBlob(pdfBlob, `${candidate.name}_document.pdf`);
+        updateOfferTemplateStatus('Generating PDF...');
+        const pdfBlob = await buildPdfFromFillerContext(context);
+        window.pdfService.downloadBlob(pdfBlob, getGeneratedPdfName(context.candidate));
+        updateOfferTemplateStatus('PDF generated and downloaded.');
         showToast('PDF generated successfully!');
     } catch (e) {
         console.error('PDF generation failed', e);
+        updateOfferTemplateStatus(`PDF generation failed: ${e.message || 'check that the template URL is reachable from this network.'}`, 'error');
         showToast('Failed to generate PDF.');
+    }
+};
+
+window.previewPdfFromCandidate = async () => {
+    const context = getPdfFillerContext();
+    if (!context) return;
+    try {
+        updateOfferTemplateStatus('Generating preview...');
+        const pdfBlob = await buildPdfFromFillerContext(context);
+        const pdfUrl = URL.createObjectURL(pdfBlob);
+        const iframe = document.getElementById('resume-preview-iframe');
+        const loader = document.getElementById('resume-preview-loader');
+        const modal = document.getElementById('modal-resume-preview');
+
+        if (iframe && loader && modal) {
+            loader.classList.remove('hidden');
+            iframe.src = 'about:blank';
+            iframe.onload = () => loader.classList.add('hidden');
+            iframe.src = pdfUrl;
+            openModal('modal-resume-preview');
+
+            const downloadBtn = document.getElementById('resume-download-btn-forced');
+            if (downloadBtn) {
+                downloadBtn.onclick = () => {
+                    window.pdfService.downloadBlob(pdfBlob, getGeneratedPdfName(context.candidate));
+                    showToast('PDF downloaded.');
+                };
+            }
+        } else {
+            window.open(pdfUrl, '_blank');
+        }
+        updateOfferTemplateStatus('Preview ready.');
+        showToast('Preview generated.');
+    } catch (e) {
+        console.error('PDF preview failed', e);
+        updateOfferTemplateStatus(`Preview failed: ${e.message || 'check that the template URL is reachable from this network.'}`, 'error');
+        showToast('Failed to generate preview.');
     }
 };
 
@@ -341,7 +530,14 @@ window.openOfferTemplateMapper = async (templateId) => {
     currentOfferTemplateMapperId = templateId;
     currentOfferTemplateMapperEntries = template.coordinateMap || {};
 
-    const fields = ['candidate_name', 'candidate_email', 'candidate_phone', 'candidate_current_company', 'candidate_designation', 'candidate_experience', 'candidate_notice_period', 'candidate_expected_ctc', 'candidate_current_ctc', 'job_title', 'job_department', 'job_location', 'offer_ctc', 'offer_monthly', 'offer_joining_date'];
+    const fields = [
+        'candidate_name', 'candidate_email', 'candidate_phone', 'candidate_current_company',
+        'candidate_designation', 'candidate_experience', 'candidate_notice_period',
+        'candidate_expected_ctc', 'candidate_current_ctc', 'candidate_qualification',
+        'candidate_skills', 'job_title', 'job_department', 'job_location', 'job_description',
+        'company_name', 'offer_ctc', 'offer_monthly', 'offer_joining_date', 'offer_date',
+        'offer_probation_period', 'offer_work_hours', 'offer_reporting_to'
+    ];
 
     document.getElementById('offer-mapper-template-name').innerText = template.name || 'Untitled';
     const fieldSelect = document.getElementById('offer-mapper-field-select');
@@ -358,9 +554,17 @@ window.openOfferTemplateMapper = async (templateId) => {
 
     // Load PDF with PDF.js
     const canvas = document.getElementById('offer-mapper-canvas');
-    const loadingTask = pdfjsLib.getDocument(template.url);
-    const pdf = await loadingTask.promise;
-    const page = await pdf.getPage(1);
+    let page;
+    try {
+        const loadingTask = pdfjsLib.getDocument(template.url);
+        const pdf = await loadingTask.promise;
+        page = await pdf.getPage(1);
+    } catch (e) {
+        console.error('Template mapper failed to load PDF', e);
+        updateOfferMapperStatus('Could not render this PDF. Confirm the GitHub/raw URL is public and reachable.');
+        showToast('Could not render template for mapping.');
+        return;
+    }
     const originalViewport = page.getViewport({ scale: 1.0 });
     currentMapperPageDim = { width: originalViewport.width, height: originalViewport.height };
 
@@ -448,8 +652,8 @@ window.renderOfferMapperMarkers = () => {
         const dot = document.createElement('span');
         dot.className = 'absolute w-2.5 h-2.5 rounded-full border border-white bg-rose-500 shadow-lg';
         dot.title = `${fieldKey} (${coords.x.toFixed(1)}, ${coords.y.toFixed(1)})`;
-        dot.style.left = `${Math.min(Math.max(sx - 4, 0), canvas.width - 8)}px`;
-        dot.style.top = `${Math.min(Math.max(sy - 4, 0), canvas.height - 8)}px`;
+        dot.style.left = `${Math.min(Math.max(sx - 4, 0), displayWidth - 8)}px`;
+        dot.style.top = `${Math.min(Math.max(sy - 4, 0), displayHeight - 8)}px`;
         markersLayer.appendChild(dot);
     }
 };
@@ -1563,7 +1767,6 @@ function renderCompanies() {
                                 </div>
                             </div>
                             <div class="absolute top-4 right-4 flex gap-1 shrink-0 bg-white/90 dark:bg-slate-900/90 p-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity border border-slate-100 dark:border-slate-800 shadow-sm z-10">
-                                <button onclick="showCompanyProfile('${c.id}')" class="p-1.5 text-slate-400 hover:text-emerald-500 rounded transition-colors" title="View Profile"><i class="fas fa-eye text-sm"></i></button>
                                 <button onclick="editCompany('${c.id}')" class="p-1.5 text-slate-400 hover:text-blue-500 rounded transition-colors" title="Edit Company"><i class="fas fa-edit text-sm"></i></button>
                                 <button onclick="deleteDocById('companies', '${c.id}')" class="p-1.5 text-slate-400 hover:text-red-500 rounded transition-colors" title="Delete Company"><i class="fas fa-trash text-sm"></i></button>
                             </div>
@@ -2670,6 +2873,7 @@ const attachFormHandlers = () => {
                     showToast("Company Added!");
                 }
 
+                notifyCrossTabChange({ type: 'data-update', collection: 'companies', id: editId || 'new' });
                 document.getElementById('modal-company').classList.add('hidden');
 
                 e.target.reset();
@@ -2694,16 +2898,32 @@ if (document.readyState === 'loading') {
 window.editCompany = async (id) => {
     const current = cachedCompanies.find(c => c.id === id);
     if (!current) return;
+
+    // Open first so modal internals are cleared before we populate them
+    openModal('modal-company');
     const form = document.getElementById('form-company');
-    form.reset();
+    if (form) form.reset();
 
     // Populate industries first, then set values
     await populateCompanyIndustrySelect(current.industry);
 
-    for (const key in current) {
-        if (key !== 'branches' && form.elements[key]) {
-            if (key === 'industry') continue; // Handled above
-            form.elements[key].value = current[key];
+    const companyFields = ['id', 'name', 'website', 'location', 'address', 'logoUrl', 'bannerUrl', 'welcomeMessage', 'employeeReview', 'about'];
+    for (const key of companyFields) {
+        if (key === 'industry') continue; // handled by populateCompanyIndustrySelect
+
+        const value = current[key] == null ? '' : current[key];
+        let field = form.elements[key];
+        if (!field) {
+            field = form.querySelector(`[name="${key}"]`) || document.getElementById(`comp-${key}`) || document.getElementById(key);
+        }
+        if (!field) continue;
+
+        if (field instanceof RadioNodeList || (field.length && !field.tagName)) {
+            Array.from(field).forEach(el => {
+                if (el.type !== 'checkbox' && el.type !== 'radio') el.value = value;
+            });
+        } else {
+            field.value = value;
         }
     }
 
@@ -2732,244 +2952,9 @@ window.editCompany = async (id) => {
 
     document.getElementById('form-company-id').value = id;
     document.getElementById('modal-company-title').innerText = "Edit Company Profile";
-    openModal('modal-company');
 };
 
-window.showCompanyProfile = (companyId) => {
-    const company = cachedCompanies.find(c => c.id === companyId);
-    if (!company) {
-        showToast('Company not found');
-        return;
-    }
-
-    // Update header
-    document.getElementById('company-profile-title').innerText = company.name || 'Company Profile';
-    document.getElementById('company-profile-subtitle').innerText = 'Workspace / Intelligence';
-    document.getElementById('company-profile-icon-box').innerHTML = `<i class="fas fa-building text-xl"></i>`;
-    document.getElementById('company-profile-avatar-box').innerHTML = `<i class="fas fa-building"></i>`;
-    document.getElementById('company-profile-name').innerText = company.name || 'Unknown Company';
-    document.getElementById('company-profile-industry').innerText = company.industry || 'Industry';
-
-    // Header metrics
-    const jobsCount = cachedJobs.filter(j => j.companyId === companyId).length;
-    const candidatesCount = cachedCandidates.filter(c => {
-        const job = cachedJobs.find(j => j.id === c.jobId);
-        return job && job.companyId === companyId;
-    }).length;
-    const activeJobsCount = cachedJobs.filter(j => j.companyId === companyId && j.status === 'Open').length;
-
-    document.getElementById('company-profile-header-metrics').innerHTML = `
-        <div class="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg text-xs font-bold">
-            <i class="fas fa-briefcase"></i>
-            <span>${jobsCount} Jobs</span>
-        </div>
-        <div class="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-lg text-xs font-bold">
-            <i class="fas fa-users"></i>
-            <span>${candidatesCount} Candidates</span>
-        </div>
-        <div class="flex items-center gap-2 px-3 py-1.5 bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 rounded-lg text-xs font-bold">
-            <i class="fas fa-clock"></i>
-            <span>${activeJobsCount} Active</span>
-        </div>
-    `;
-
-    // Sidebar actions
-    let sidebarActions = '';
-    if (company.website) {
-        sidebarActions += `
-            <button onclick="window.open('${company.website}', '_blank')" class="w-full flex items-center gap-3 p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors">
-                <i class="fas fa-globe"></i>
-                <span class="text-sm font-medium">Visit Website</span>
-            </button>
-        `;
-    }
-    sidebarActions += `
-        <button onclick="editCompany('${companyId}')" class="w-full flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-            <i class="fas fa-edit"></i>
-            <span class="text-sm font-medium">Edit Company</span>
-        </button>
-    `;
-    document.getElementById('company-profile-sidebar-actions').innerHTML = sidebarActions;
-
-    // Main content
-    let contentHtml = '';
-
-    // Overview section
-    contentHtml += `
-        <div class="workspace-card">
-            <div class="card-header">
-                <h3 class="card-title">Company Overview</h3>
-            </div>
-            <div class="card-content space-y-4">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="flex items-start gap-3">
-                        <i class="fas fa-building mt-1 text-slate-400"></i>
-                        <div>
-                            <p class="text-xs font-bold text-slate-500 uppercase tracking-widest">Company Name</p>
-                            <p class="text-sm text-slate-800 dark:text-white font-medium">${company.name || 'N/A'}</p>
-                        </div>
-                    </div>
-                    <div class="flex items-start gap-3">
-                        <i class="fas fa-industry mt-1 text-slate-400"></i>
-                        <div>
-                            <p class="text-xs font-bold text-slate-500 uppercase tracking-widest">Industry</p>
-                            <p class="text-sm text-slate-800 dark:text-white font-medium">${company.industry || 'N/A'}</p>
-                        </div>
-                    </div>
-                    <div class="flex items-start gap-3">
-                        <i class="fas fa-map-marker-alt mt-1 text-slate-400"></i>
-                        <div>
-                            <p class="text-xs font-bold text-slate-500 uppercase tracking-widest">Headquarters</p>
-                            <p class="text-sm text-slate-800 dark:text-white font-medium">${company.location || 'N/A'}</p>
-                        </div>
-                    </div>
-                    ${company.website ? `
-                    <div class="flex items-start gap-3">
-                        <i class="fas fa-globe mt-1 text-slate-400"></i>
-                        <div>
-                            <p class="text-xs font-bold text-slate-500 uppercase tracking-widest">Website</p>
-                            <a href="${company.website}" target="_blank" class="text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium">${company.website}</a>
-                        </div>
-                    </div>
-                    ` : ''}
-                </div>
-            </div>
-        </div>
-    `;
-
-    // Branches section
-    if (company.branches && company.branches.length > 0) {
-        contentHtml += `
-            <div class="workspace-card">
-                <div class="card-header">
-                    <h3 class="card-title">Branches & Locations</h3>
-                </div>
-                <div class="card-content">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        ${company.branches.map(branch => `
-                            <div class="flex items-center gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
-                                <div class="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                                    <i class="fas fa-map-marker-alt text-xs"></i>
-                                </div>
-                                <div>
-                                    <p class="text-sm font-medium text-slate-800 dark:text-white">${branch.name}</p>
-                                    <p class="text-xs text-slate-500">${branch.location}</p>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    // Jobs section
-    const companyJobs = cachedJobs.filter(j => j.companyId === companyId);
-    if (companyJobs.length > 0) {
-        contentHtml += `
-            <div class="workspace-card">
-                <div class="card-header">
-                    <h3 class="card-title">Active Job Openings</h3>
-                    <span class="badge badge-blue">${companyJobs.length}</span>
-                </div>
-                <div class="card-content">
-                    <div class="space-y-3">
-                        ${companyJobs.slice(0, 5).map(job => {
-            const candidatesForJob = cachedCandidates.filter(c => c.jobId === job.id);
-            const activeCandidates = candidatesForJob.filter(c => ['Screening', 'Interview', 'Selected'].includes(c.stage)).length;
-            const hiredCandidates = candidatesForJob.filter(c => c.stage === 'Hired').length;
-
-            return `
-                                <div class="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 hover:border-blue-500/30 transition-colors">
-                                    <div class="flex-1">
-                                        <h4 class="text-sm font-medium text-slate-800 dark:text-white">${job.title}</h4>
-                                        <p class="text-xs text-slate-500">${job.department || 'N/A'} • ${job.branchName && job.branchLocation ? `${job.branchName} (${job.branchLocation})` : (job.location || 'N/A')}</p>
-                                    </div>
-                                    <div class="flex items-center gap-4 text-xs">
-                                        <div class="text-center">
-                                            <p class="font-bold text-slate-700 dark:text-slate-300">${candidatesForJob.length}</p>
-                                            <p class="text-slate-500">Total</p>
-                                        </div>
-                                        <div class="text-center">
-                                            <p class="font-bold text-blue-600">${activeCandidates}</p>
-                                            <p class="text-slate-500">Active</p>
-                                        </div>
-                                        <div class="text-center">
-                                            <p class="font-bold text-emerald-600">${hiredCandidates}</p>
-                                            <p class="text-slate-500">Hired</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            `;
-        }).join('')}
-                        ${companyJobs.length > 5 ? `
-                            <p class="text-xs text-slate-500 text-center pt-2">And ${companyJobs.length - 5} more jobs...</p>
-                        ` : ''}
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    // Candidates pipeline
-    const companyCandidates = cachedCandidates.filter(c => {
-        const job = cachedJobs.find(j => j.id === c.jobId);
-        return job && job.companyId === companyId;
-    });
-    if (companyCandidates.length > 0) {
-        const stages = ['Applied', 'Screening', 'Interview', 'Selected', 'Hired'];
-        const stageCounts = stages.map(stage => ({
-            stage,
-            count: companyCandidates.filter(c => c.stage === stage).length
-        }));
-
-        contentHtml += `
-            <div class="workspace-card">
-                <div class="card-header">
-                    <h3 class="card-title">Recruitment Pipeline</h3>
-                    <span class="badge badge-emerald">${companyCandidates.length} Candidates</span>
-                </div>
-                <div class="card-content">
-                    <div class="space-y-3">
-                        ${stageCounts.map(({ stage, count }) => `
-                            <div class="flex items-center justify-between">
-                                <span class="text-sm text-slate-600 dark:text-slate-400">${stage}</span>
-                                <div class="flex items-center gap-2">
-                                    <div class="w-24 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                                        <div class="h-full bg-blue-500 rounded-full transition-all duration-500" style="width: ${companyCandidates.length > 0 ? (count / companyCandidates.length) * 100 : 0}%"></div>
-                                    </div>
-                                    <span class="text-sm font-bold text-slate-700 dark:text-slate-300 w-8 text-right">${count}</span>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    document.getElementById('company-profile-view-content').innerHTML = contentHtml;
-
-    // Actions sidebar
-    document.getElementById('company-profile-view-actions').innerHTML = `
-        <div class="space-y-3">
-            <button onclick="showSection('jobs'); document.getElementById('global-search').value='${company.name}'; globalSearchQuery='${company.name.toLowerCase()}'; renderJobs();" class="w-full flex items-center gap-3 p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors">
-                <i class="fas fa-briefcase"></i>
-                <span class="text-sm font-medium">View All Jobs</span>
-            </button>
-            <button onclick="showSection('candidates'); document.getElementById('global-search').value='${company.name}'; globalSearchQuery='${company.name.toLowerCase()}'; renderCandidates();" class="w-full flex items-center gap-3 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors">
-                <i class="fas fa-users"></i>
-                <span class="text-sm font-medium">View Candidates</span>
-            </button>
-            <button onclick="editCompany('${companyId}')" class="w-full flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-                <i class="fas fa-edit"></i>
-                <span class="text-sm font-medium">Edit Profile</span>
-            </button>
-        </div>
-    `;
-
-    openModal('modal-company-profile-view');
-};
+// Company profile view is removed; only edit and delete remain for companies tab.
 
 document.getElementById('form-job').onsubmit = async (e) => {
     e.preventDefault();
@@ -3052,6 +3037,7 @@ document.getElementById('form-job').onsubmit = async (e) => {
             showToast("Job Created Successfully!");
         }
 
+        notifyCrossTabChange({ type: 'data-update', collection: 'jobs', id: editId || 'new' });
         document.getElementById('modal-job').classList.add('hidden');
 
         e.target.reset();
@@ -3129,17 +3115,24 @@ window.toggleJobStatus = async (id, currentStatus) => {
         }
 
         await updateDoc(doc(db, "jobs", id), updateData);
+        notifyCrossTabChange({ type: 'data-update', collection: 'jobs', id });
         showToast(`Job successfully marked as ${newStatus} !`);
     } catch (e) {
         alert("Error toggling job status: " + e.message);
     }
 };
 
-window.editJob = (id) => {
+window.editJob = async (id) => {
     const job = cachedJobs.find(j => j.id === id);
     if (!job) return;
+
+    // Open modal first so internals are cleared before we populate them
+    openModal('modal-job');
     const form = document.getElementById('form-job');
-    form.reset();
+    if (form) form.reset();
+
+    populateJobCompanySelect();
+    await populateJobMastersData();
 
     function populateElement(element, value) {
         if (!element) return;
@@ -3217,14 +3210,15 @@ window.editJob = (id) => {
     if (statusDisplay) {
         statusDisplay.innerText = job.status === 'Open' ? 'Active Pipeline' : (job.status === 'Closed' ? 'Filled / Closed' : 'Drafting Pipeline');
     }
+    const companyDisplay = document.getElementById('job-company-display');
+    if (companyDisplay) {
+        const company = cachedCompanies.find(c => c.id === job.companyId);
+        companyDisplay.innerText = company ? company.name : 'No company selected';
+    }
     const budgetMonthly = document.getElementById('job-budget-monthly-imm');
     if (budgetMonthly && job.budget) {
         budgetMonthly.innerText = '≈ ₹' + Math.round(job.budget / 12).toLocaleString() + '/mo';
     }
-
-    // Populate company select and masters data
-    populateJobCompanySelect();
-    populateJobMastersData();
 
     // Populate branch selection after company is set
     setTimeout(() => {
@@ -3252,7 +3246,6 @@ window.editJob = (id) => {
     try { initCustomSelects(); } catch (e) { console.warn('initCustomSelects in editJob failed', e); }
     document.getElementById('form-job-id').value = id;
     document.getElementById('modal-job-title').innerText = "Edit Job Configuration";
-    openModal('modal-job');
 };
 
 // Cloudinary Config (Default fallback, dynamic values picked from portalSettings when available)
@@ -3397,6 +3390,7 @@ document.getElementById('form-candidate').onsubmit = async (e) => {
             showToast("Candidate Added!");
         }
 
+        notifyCrossTabChange({ type: 'data-update', collection: 'candidates', id: editId || 'new' });
         document.getElementById('modal-candidate').classList.add('hidden');
 
         e.target.reset();
@@ -3625,6 +3619,7 @@ document.getElementById('form-interview').onsubmit = async (e) => {
             }
         }
 
+        notifyCrossTabChange({ type: 'data-update', collection: 'interviews', id: editId || 'new' });
         document.getElementById('modal-interview').classList.add('hidden');
         e.target.reset();
         document.getElementById('form-interview-id').value = '';
@@ -3898,6 +3893,7 @@ document.getElementById('form-wa-template').onsubmit = async (e) => {
             showToast("Template Saved!");
         }
 
+        notifyCrossTabChange({ type: 'data-update', collection: 'whatsappTemplates', id: editId || 'new' });
         document.getElementById('modal-wa-template').classList.add('hidden');
         e.target.reset();
         document.getElementById('form-wa-template-id').value = '';
@@ -4768,6 +4764,7 @@ window.deleteDocById = async (col, id) => {
             }
 
             await deleteDoc(doc(db, col, id));
+            notifyCrossTabChange({ type: 'data-update', collection: col, id });
             showToast("Deleted Successfully");
         } catch (e) { alert("Error deleting: " + e.message); }
     }
@@ -5273,6 +5270,8 @@ window.showSection = async (sectionId) => {
     }
 
     try {
+        // Close any open modal before switching section
+        document.querySelectorAll('#modal-container .fixed.inset-0:not(.hidden)').forEach(modal => modal.classList.add('hidden'));
         // Reduced delay for snappier feel
         await new Promise(resolve => setTimeout(resolve, 200));
         document.querySelectorAll('#content-area > div').forEach(div => div.classList.add('hidden'));
@@ -5357,6 +5356,7 @@ window.showSection = async (sectionId) => {
                 subtitle: 'Analyze recruitment performance and export data',
                 actions: []
             },
+
             'contacts': {
                 title: 'Contacts & Dialer',
                 subtitle: 'Manage talent network and initiate remote calls',
@@ -5391,6 +5391,8 @@ window.showSection = async (sectionId) => {
 
         // Update FAB
         updateFAB(info.actions || []);
+
+
 
         // Ensure the visible section is rendered/refreshed so filters take effect
         switch (sectionId) {
@@ -5490,6 +5492,9 @@ function updateFAB(actions) {
 }
 
 
+const CROSS_TAB_SYNC_KEY = 'recruit-cross-tab-sync';
+const crossTabChannel = window.BroadcastChannel ? new BroadcastChannel('recruit-sync') : null;
+
 window.openModal = (id) => {
     // Close any other open modals before opening the requested one
     document.querySelectorAll('#modal-container .fixed.inset-0:not(.hidden)').forEach(modal => {
@@ -5510,6 +5515,38 @@ window.closeModal = (id) => {
         target.classList.add('hidden');
     }
 };
+
+function notifyCrossTabChange(payload = {}) {
+    const message = { ts: Date.now(), payload };
+    if (crossTabChannel) {
+        try { crossTabChannel.postMessage(message); } catch (e) { console.warn('BroadcastChannel unavailable', e); }
+    }
+    try {
+        localStorage.setItem(CROSS_TAB_SYNC_KEY, JSON.stringify(message));
+    } catch (e) {
+        console.warn('Unable to write cross-tab sync data', e);
+    }
+}
+
+function handleCrossTabMessage(message) {
+    if (!message || !message.ts || !message.payload) return;
+    if (message.payload.type === 'data-update') {
+        queueRender();
+    }
+}
+
+if (crossTabChannel) {
+    crossTabChannel.onmessage = (event) => {
+        handleCrossTabMessage(event.data);
+    };
+}
+window.addEventListener('storage', (event) => {
+    if (event.key === CROSS_TAB_SYNC_KEY && event.newValue) {
+        let message = null;
+        try { message = JSON.parse(event.newValue); } catch (e) { return; }
+        handleCrossTabMessage(message);
+    }
+});
 
 // Function to clear modal-specific data
 function clearModalData(modalId) {
@@ -6175,10 +6212,10 @@ window.loadPortalSettings = async () => {
                                 </h4>
                                 <p class="text-sm text-slate-500 mt-1">Manage branding, visibility, and access for your public career page.</p>
                                 <div class="mt-3 flex items-center gap-3">
-                                    <a href="Candidate/" target="_blank" class="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1.5 bg-blue-50 dark:bg-blue-900/30 px-3 py-1.5 rounded-lg border border-blue-100 dark:border-blue-800 transition-all">
+                                    <a href="https://candidate.nextgenudaan.in" target="_blank" rel="noopener" class="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1.5 bg-blue-50 dark:bg-blue-900/30 px-3 py-1.5 rounded-lg border border-blue-100 dark:border-blue-800 transition-all">
                                         <i class="fas fa-external-link-alt"></i> View Live Portal
                                     </a>
-                                    <span class="text-[10px] font-mono text-slate-400 opacity-70">./Candidate/</span>
+                                    <span class="text-[10px] font-mono text-slate-400 opacity-70">candidate.nextgenudaan.in</span>
                                 </div>
                             </div>
                             <div class="flex items-center gap-4 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800">
@@ -8786,11 +8823,12 @@ function populateJobCompanySelect() {
 function populateJobMastersData() {
     // Load masters data if not already loaded
     if (cachedDepartments.length === 0 || cachedDesignations.length === 0) {
-        loadMastersData().then(() => {
+        return loadMastersData().then(() => {
             populateJobMastersSelects();
         });
     } else {
         populateJobMastersSelects();
+        return Promise.resolve();
     }
 }
 

@@ -5,29 +5,37 @@
     }
 
     async function fetchArrayBuffer(templateUrl) {
-        const res = await fetch(templateUrl);
+        const res = await fetch(templateUrl, { mode: 'cors' });
         if (!res.ok) throw new Error('Unable to fetch template: ' + res.status);
         return await res.arrayBuffer();
     }
 
-    async function getTemplateFields(templateUrl) {
+    async function getTemplateInfo(templateUrl) {
         const buffer = await fetchArrayBuffer(templateUrl);
         const pdfDoc = await PDFLib.PDFDocument.load(buffer);
+        const pages = pdfDoc.getPages();
+        const firstPage = pages[0];
 
         let fields = [];
         try {
             const form = pdfDoc.getForm();
-            const pdfFields = form.getFields();
-            fields = pdfFields.map(field => ({
+            fields = form.getFields().map(field => ({
                 name: field.getName(),
                 type: field.constructor.name
             }));
         } catch (e) {
-            // Non-AcroForm or no fields
             fields = [];
         }
 
-        return fields;
+        return {
+            fields,
+            pageCount: pages.length,
+            pageSize: firstPage ? { width: firstPage.getWidth(), height: firstPage.getHeight() } : { width: 0, height: 0 }
+        };
+    }
+
+    async function getTemplateFields(templateUrl) {
+        return (await getTemplateInfo(templateUrl)).fields;
     }
 
     async function getTemplatePageSize(templateUrl) {
@@ -61,6 +69,18 @@
         return String(value);
     }
 
+    function toPdfSafeText(value) {
+        if (value == null) return '';
+        return String(value)
+            .replace(/\u20b9/g, 'Rs.')
+            .replace(/[\u2018\u2019]/g, "'")
+            .replace(/[\u201c\u201d]/g, '"')
+            .replace(/[\u2013\u2014]/g, '-')
+            .replace(/\u2026/g, '...')
+            .replace(/\u00a0/g, ' ')
+            .replace(/[^\x09\x0a\x0d\x20-\x7e]/g, '');
+    }
+
     async function fillPdfForm(templateUrl, data, options = {}) {
         const buffer = await fetchArrayBuffer(templateUrl);
         const pdfDoc = await PDFLib.PDFDocument.load(buffer);
@@ -76,11 +96,13 @@
                 fields.forEach(field => {
                     const name = field.getName();
                     const rawValue = getMappingValue(name, data);
-                    const value = rawValue == null ? '' : String(rawValue);
+                    const value = toPdfSafeText(rawValue);
 
                     const fieldType = field.constructor.name;
                     if (fieldType === 'PDFTextField' || fieldType === 'PDFDropdown' || fieldType === 'PDFOptionList') {
-                        if (value !== '') field.setText(value);
+                        if (value !== '') {
+                            try { field.setText(value); } catch (err) { console.warn('Skipping PDF field', name, err); }
+                        }
                     } else if (fieldType === 'PDFCheckBox') {
                         if (['true', '1', 'yes', 'on'].includes(String(value).toLowerCase())) field.check();
                         else field.uncheck();
@@ -89,7 +111,7 @@
                     } else if (fieldType === 'PDFButton') {
                         // no-op
                     } else {
-                        try { field.setText(value); } catch (err) { /* ignore unknown type */ }
+                        try { field.setText(value); } catch (err) { console.warn('Skipping PDF field', name, err); }
                     }
                 });
             }
@@ -107,7 +129,7 @@
             const coordMap = options.coordMap || {};
             if (Object.keys(coordMap).length > 0) {
                 for (const [fieldKey, coords] of Object.entries(coordMap)) {
-                    const value = getMappingValue(fieldKey, data);
+                    const value = toPdfSafeText(getMappingValue(fieldKey, data));
                     if (!value) continue;
 
                     const x = coords.x || 40;
@@ -115,7 +137,7 @@
                     const size = coords.size || 11;
                     const color = coords.color || PDFLib.rgb(0,0,0);
 
-                    firstPage.drawText(String(value), {
+                    firstPage.drawText(value, {
                         x,
                         y,
                         size,
@@ -127,7 +149,9 @@
                 // fallback content block
                 let textLines = [];
                 for (const [key, value] of Object.entries(data)) {
-                    textLines.push(`${key}: ${value}`);
+                    const safeLine = toPdfSafeText(`${key}: ${value}`);
+                    if (!safeLine.trim()) continue;
+                    textLines.push(safeLine);
                     if (textLines.length >= 20) break;
                 }
 
@@ -160,12 +184,14 @@
     }
 
     window.pdfService = {
+        getTemplateInfo,
         getTemplateFields,
         getTemplatePageSize,
         fillPdfForm,
         downloadBlob,
         normalizeKey,
         getMappingValue,
-        flattenDate
+        flattenDate,
+        toPdfSafeText
     };
 })();
