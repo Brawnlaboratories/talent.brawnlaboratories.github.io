@@ -5179,6 +5179,8 @@ function initCustomSelects() {
 // Initialize custom selects once DOM is ready for interactive controls
 setTimeout(() => { try { initCustomSelects(); } catch (e) { console.warn('initCustomSelects failed', e); } }, 300);
 
+
+
 // Sidebar Collapse Logic
 window.toggleSidebar = () => {
     const sidebar = document.getElementById('sidebar');
@@ -5199,8 +5201,24 @@ window.toggleProfileMenu = (e) => {
 
 // Close dropdowns on outside click
 window.addEventListener('click', (e) => {
+    // If click originated within a modal, do not handle dropdown logic
+    if (e.target.closest('#modal-container .fixed.inset-0') || e.target.closest('.fixed.inset-0:not(.hidden)')) {
+        return;
+    }
     const menu = document.getElementById('profile-menu');
     if (menu && menu.classList.contains('show') && !e.target.closest('.profile-dropdown')) {
+        menu.classList.remove('show');
+    }
+});
+
+// Close dropdowns and active modals on Escape key
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        // Close profile menu if open
+        const menu = document.getElementById('profile-menu');
+        if (menu && menu.classList.contains('show')) {
+            menu.classList.remove('show');
+        }
         menu.classList.remove('show');
     }
 });
