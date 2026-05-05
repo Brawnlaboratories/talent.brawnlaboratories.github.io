@@ -5586,19 +5586,6 @@ function handleCrossTabMessage(message) {
     }
 }
 
-if (crossTabChannel) {
-    crossTabChannel.onmessage = (event) => {
-        handleCrossTabMessage(event.data);
-    };
-}
-window.addEventListener('storage', (event) => {
-    if (event.key === CROSS_TAB_SYNC_KEY && event.newValue) {
-        let message = null;
-        try { message = JSON.parse(event.newValue); } catch (e) { return; }
-        handleCrossTabMessage(message);
-    }
-});
-
 // Function to clear modal-specific data
 function clearModalData(modalId) {
     const modal = document.getElementById(modalId);
@@ -5608,12 +5595,11 @@ function clearModalData(modalId) {
     const forms = modal.querySelectorAll('form');
     forms.forEach(form => {
         form.reset();
-        // Clear any hidden ID fields
         const idField = form.querySelector('input[name="id"]');
         if (idField) idField.value = '';
     });
 
-    // Clear dynamic content areas
+    // Clear dynamic content areas ONLY if they are inside this modal
     const dynamicAreas = [
         'profile-view-content',
         'company-profile-view-content',
@@ -5625,7 +5611,7 @@ function clearModalData(modalId) {
     ];
 
     dynamicAreas.forEach(areaId => {
-        const area = document.getElementById(areaId);
+        const area = modal.querySelector('#' + areaId);
         if (area) area.innerHTML = '';
     });
 
