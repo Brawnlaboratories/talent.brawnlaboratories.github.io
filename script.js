@@ -1230,11 +1230,11 @@ function setupRealtimeListeners() {
     }, (error) => handleError("Jobs", error));
 
     // Listen for Candidates (Unified) - with pagination for performance
-    const candidateQuery = query(collection(db, "candidates"), orderBy("createdAt", "desc"), limit(500));
+    const candidateQuery = query(collection(db, "candidates"), limit(500));
     onSnapshot(candidateQuery, (snapshot) => {
         logSource("Candidates", snapshot);
         cachedCandidates = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        cachedTalentPool = cachedCandidates.filter(c => c.inTalentPool);
+        cachedTalentPool = getTalentPoolCandidates();
 
         if (typeof renderTalentPool === 'function') renderTalentPool();
         if (typeof updateTalentPoolBadge === 'function') updateTalentPoolBadge();
@@ -2507,7 +2507,7 @@ function updateDashboard() {
 
 
     // Talent Pool
-    const talentPool = cachedCandidates.filter(c => c.isNew && c.stage !== 'Rejected').length;
+    const talentPool = getTalentPoolCandidates().filter(c => c.isNew || c.stage === 'Applied').length;
     const tpEl = document.getElementById('stat-talent-pool');
     if (tpEl) tpEl.innerText = talentPool;
 
@@ -5533,12 +5533,11 @@ window.openModal = (id) => {
     document.querySelectorAll('#modal-container .fixed.inset-0:not(.hidden)').forEach(modal => {
         if (modal.id !== id) {
             modal.classList.add('hidden');
+            clearModalData(modal.id);
         }
     });
     const target = document.getElementById(id);
     if (target) {
-        // Clear modal data before showing
-        clearModalData(id);
         target.classList.remove('hidden');
     }
 };
@@ -5546,6 +5545,7 @@ window.closeModal = (id) => {
     const target = document.getElementById(id);
     if (target) {
         target.classList.add('hidden');
+        clearModalData(id);
     }
 };
 
@@ -5758,6 +5758,8 @@ function clearModalData(modalId) {
     }
 }
 
+window.resetModalData = clearModalData;
+
 function showToast(msg) {
     const t = document.getElementById('toast');
     t.innerText = msg;
@@ -5801,17 +5803,24 @@ function getFriendlyErrorMessage(msg) {
 document.getElementById('filter-budget').onchange = renderCandidates;
 
 // Theme Toggle Logic
+window.toggleTheme = (event) => {
+    if (event && typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+    const isDark = document.documentElement.classList.toggle('dark');
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+
+    // Update charts if they exist
+    if (stageChartInstance) updateChartTheme(stageChartInstance);
+    if (budgetChartInstance) updateChartTheme(budgetChartInstance);
+    if (sourceChartInstance) updateChartTheme(sourceChartInstance);
+};
+
+window.logoutNow = async () => {
+    await signOut(auth);
+};
+
 const themeToggle = document.getElementById('theme-toggle');
 if (themeToggle) {
-    themeToggle.addEventListener('click', () => {
-        const isDark = document.documentElement.classList.toggle('dark');
-        localStorage.setItem('theme', isDark ? 'dark' : 'light');
-
-        // Update charts if they exist
-        if (stageChartInstance) updateChartTheme(stageChartInstance);
-        if (budgetChartInstance) updateChartTheme(budgetChartInstance);
-        if (sourceChartInstance) updateChartTheme(sourceChartInstance);
-    });
+    themeToggle.addEventListener('click', window.toggleTheme);
 }
 
 function updateChartTheme(chart) {
@@ -6755,7 +6764,7 @@ window.showCandidateProfile = (id) => {
 
                 <div class="pt-4 border-t border-slate-100 dark:border-slate-800">
                     <p class="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3">External Tools</p>
-                    <button onclick="openInterviewModal()" class="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-xs">Schedule Interview</button>
+                    <button onclick="openInterviewModal('${c.id}')" class="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-xs">Schedule Interview</button>
                     <button onclick="openOfferModal('${c.id}')" class="mt-2 w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs">Send Offer</button>
                     <button onclick="generateShareLink('${c.id}')" class="mt-2 w-full py-3 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-bold text-xs">Share Profile</button>
                 </div>
@@ -7042,6 +7051,42 @@ window.showCompanyProfile = (id) => {
 window.currentInboxJobId = null;
 let currentInboxFilter = 'all';
 
+function isTalentPoolCandidate(candidate) {
+    if (!candidate) return false;
+    const stage = String(candidate.stage || '').trim();
+    const rejectedStages = ['REJECTED', 'Rejected', 'Backed Out', 'Not Interested'];
+    return candidate.inTalentPool === true ||
+        candidate.isNew === true ||
+        stage === '' ||
+        stage === 'Applied' ||
+        stage === 'Contact' ||
+        rejectedStages.includes(stage);
+}
+
+function getTalentPoolCandidates() {
+    return cachedCandidates.filter(isTalentPoolCandidate);
+}
+
+function refreshTalentPoolCache() {
+    cachedTalentPool = getTalentPoolCandidates();
+    return cachedTalentPool;
+}
+
+function getCandidateCreatedMs(candidate) {
+    const created = candidate?.createdAt || candidate?.appliedAt || candidate?.updatedAt;
+    if (created?.toMillis) return created.toMillis();
+    if (created?.seconds) return created.seconds * 1000;
+    if (typeof created === 'string') {
+        const parsed = Date.parse(created);
+        return Number.isNaN(parsed) ? 0 : parsed;
+    }
+    return 0;
+}
+
+function getJobStatus(job) {
+    return String(job?.status || 'Open');
+}
+
 window.renderTalentPool = () => {
     const overviewLevel = document.getElementById('talentpool-overview-level');
     const inboxLevel = document.getElementById('talentpool-inbox-level');
@@ -7082,34 +7127,38 @@ window.renderTalentPool = () => {
     const searchTerm = document.getElementById('talentpool-search')?.value?.toLowerCase() || '';
     const statusFilter = document.getElementById('talentpool-filter-status')?.value || 'all';
 
-    const candidates = cachedTalentPool;
+    const candidates = refreshTalentPoolCache();
 
     // Filter jobs by search and status
     let jobs = cachedJobs;
     if (statusFilter !== 'all') {
-        jobs = jobs.filter(j => j.status === statusFilter);
+        jobs = jobs.filter(j => getJobStatus(j) === statusFilter);
     }
 
     if (searchTerm) {
         jobs = jobs.filter(j =>
-            j.title.toLowerCase().includes(searchTerm) ||
-            j.department.toLowerCase().includes(searchTerm) ||
-            j.location.toLowerCase().includes(searchTerm) ||
-            j.companyName?.toLowerCase().includes(searchTerm)
+            String(j.title || '').toLowerCase().includes(searchTerm) ||
+            String(j.department || '').toLowerCase().includes(searchTerm) ||
+            String(j.location || '').toLowerCase().includes(searchTerm) ||
+            String(j.companyName || '').toLowerCase().includes(searchTerm)
         );
     }
 
     // Calculate stats
     const totalJobs = jobs.length;
-    const activeJobs = jobs.filter(j => j.status === 'Open' || j.status === 'Active').length;
+    const activeJobs = jobs.filter(j => ['Open', 'Active'].includes(getJobStatus(j))).length;
     const totalResponses = jobs.reduce((sum, j) => sum + candidates.filter(c => c.jobId === j.id).length, 0);
     const avgResponseRate = totalJobs > 0 ? Math.round((totalResponses / totalJobs) * 100) / 100 : 0;
 
     // Update stats display
-    document.getElementById('talentpool-total-jobs').innerText = totalJobs;
-    document.getElementById('talentpool-active-jobs').innerText = activeJobs;
-    document.getElementById('talentpool-total-responses').innerText = totalResponses;
-    document.getElementById('talentpool-avg-response-rate').innerText = `${avgResponseRate}%`;
+    const totalJobsEl = document.getElementById('talentpool-total-jobs');
+    const activeJobsEl = document.getElementById('talentpool-active-jobs');
+    const responsesEl = document.getElementById('talentpool-total-responses');
+    const avgEl = document.getElementById('talentpool-avg-response-rate');
+    if (totalJobsEl) totalJobsEl.innerText = totalJobs;
+    if (activeJobsEl) activeJobsEl.innerText = activeJobs;
+    if (responsesEl) responsesEl.innerText = totalResponses;
+    if (avgEl) avgEl.innerText = `${avgResponseRate}%`;
 
     if (jobs.length === 0) {
         jobList.innerHTML = `
@@ -7126,9 +7175,10 @@ window.renderTalentPool = () => {
         const jobResponses = candidates.filter(c => c.jobId === j.id);
         const newCount = jobResponses.filter(c => c.isNew).length;
         const rejectedStages = ['REJECTED', 'Rejected', 'Backed Out', 'Not Interested'];
-        const shortlistedCount = cachedCandidates.filter(c => c.jobId === j.id && !c.inTalentPool && !rejectedStages.includes(c.stage)).length;
+        const shortlistedCount = cachedCandidates.filter(c => c.jobId === j.id && !isTalentPoolCandidate(c) && !rejectedStages.includes(c.stage)).length;
         const rejectedCount = cachedCandidates.filter(c => c.jobId === j.id && rejectedStages.includes(c.stage)).length;
-        const statusColor = j.status === 'Open' || j.status === 'Active' ? 'emerald' : 'slate';
+        const status = getJobStatus(j);
+        const statusColor = status === 'Open' || status === 'Active' ? 'emerald' : 'slate';
 
         return `
                     <div onclick="viewJobInbox('${j.id}')" class="group bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-xl hover:shadow-blue-500/5 transition-all cursor-pointer flex flex-col sm:flex-row items-start sm:items-center gap-4">
@@ -7144,7 +7194,7 @@ window.renderTalentPool = () => {
                                     <span class="opacity-30">•</span>
                                     <span class="flex items-center gap-1"><i class="fas fa-building opacity-70"></i> ${j.department}</span>
                                     <span class="opacity-30">•</span>
-                                    <span class="flex items-center gap-1 bg-${statusColor}-50 text-${statusColor}-600 px-1.5 py-0.5 rounded text-[9px] uppercase font-bold">${j.status || 'Active'}</span>
+                                    <span class="flex items-center gap-1 bg-${statusColor}-50 text-${statusColor}-600 px-1.5 py-0.5 rounded text-[9px] uppercase font-bold">${status}</span>
                                 </div>
                             </div>
                         </div>
@@ -7214,7 +7264,8 @@ window.populateInboxSourceFilter = () => {
     const sourceFilter = document.getElementById('inbox-filter-source');
     if (!sourceFilter || !window.currentInboxJobId) return;
 
-    const candidates = cachedTalentPool.filter(c => c.jobId === window.currentInboxJobId);
+    const currentValue = sourceFilter.value || 'all';
+    const candidates = refreshTalentPoolCache().filter(c => c.jobId === window.currentInboxJobId);
     const sources = [...new Set(candidates.map(c => c.source).filter(s => s))];
 
     sourceFilter.innerHTML = '<option value="all">All Sources</option>';
@@ -7224,6 +7275,7 @@ window.populateInboxSourceFilter = () => {
         option.textContent = source;
         sourceFilter.appendChild(option);
     });
+    if (sources.includes(currentValue)) sourceFilter.value = currentValue;
 };
 
 window.renderInboxCandidates = () => {
@@ -7299,14 +7351,18 @@ window.renderInboxCandidates = () => {
 let currentInboxQueue = [];
 
 window.renderInboxCandidates = () => {
-    const searchTerm = getEffectiveQuery('inbox');
+    const localSearch = document.getElementById('inbox-search')?.value || '';
+    const searchTerm = (localSearch || getEffectiveQuery('inbox') || '').toLowerCase();
+    const sourceFilter = document.getElementById('inbox-filter-source')?.value || 'all';
+    const sortOption = document.getElementById('inbox-sort')?.value || 'newest';
     const listContainer = document.getElementById('inbox-candidate-list');
     if (!listContainer || !window.currentInboxJobId) return;
 
     const job = cachedJobs.find(j => j.id === window.currentInboxJobId);
-    let candidates = cachedTalentPool.filter(c => c.jobId === window.currentInboxJobId);
+    const poolCandidates = refreshTalentPoolCache();
+    let candidates = poolCandidates.filter(c => c.jobId === window.currentInboxJobId);
     const rejectedStages = ['REJECTED', 'Rejected', 'Backed Out', 'Not Interested'];
-    const shortlistedCandidates = cachedCandidates.filter(c => c.jobId === window.currentInboxJobId && !rejectedStages.includes(c.stage));
+    const shortlistedCandidates = cachedCandidates.filter(c => c.jobId === window.currentInboxJobId && !isTalentPoolCandidate(c) && !rejectedStages.includes(c.stage));
     const rejectedCandidates = cachedCandidates.filter(c => c.jobId === window.currentInboxJobId && rejectedStages.includes(c.stage));
 
     // Apply Folder Filter
@@ -7314,6 +7370,10 @@ window.renderInboxCandidates = () => {
     else if (currentInboxFilter === 'new') candidates = candidates.filter(c => c.isNew);
     else if (currentInboxFilter === 'shortlisted') candidates = shortlistedCandidates;
     else if (currentInboxFilter === 'rejected') candidates = rejectedCandidates;
+
+    if (sourceFilter !== 'all') {
+        candidates = candidates.filter(c => (c.source || '') === sourceFilter);
+    }
 
     // Apply Search Filter
     if (searchTerm) {
@@ -7325,13 +7385,46 @@ window.renderInboxCandidates = () => {
         );
     }
 
+    candidates.sort((a, b) => {
+        switch (sortOption) {
+            case 'oldest':
+                return getCandidateCreatedMs(a) - getCandidateCreatedMs(b);
+            case 'match-high':
+                return calculateMatchScore(b, job) - calculateMatchScore(a, job);
+            case 'match-low':
+                return calculateMatchScore(a, job) - calculateMatchScore(b, job);
+            case 'name-asc':
+                return String(a.name || '').localeCompare(String(b.name || ''));
+            case 'name-desc':
+                return String(b.name || '').localeCompare(String(a.name || ''));
+            case 'newest':
+            default:
+                return getCandidateCreatedMs(b) - getCandidateCreatedMs(a);
+        }
+    });
+
     currentInboxQueue = candidates; // Store for navigation
 
     // Update Counts
-    document.getElementById('count-all').innerText = cachedTalentPool.filter(c => c.jobId === window.currentInboxJobId).length;
-    document.getElementById('count-new').innerText = cachedTalentPool.filter(c => c.jobId === window.currentInboxJobId && c.isNew).length;
-    document.getElementById('count-shortlisted').innerText = shortlistedCandidates.length;
-    document.getElementById('count-rejected').innerText = rejectedCandidates.length;
+    const countAllEl = document.getElementById('count-all');
+    const countNewEl = document.getElementById('count-new');
+    const countShortlistedEl = document.getElementById('count-shortlisted');
+    const countRejectedEl = document.getElementById('count-rejected');
+    if (countAllEl) countAllEl.innerText = poolCandidates.filter(c => c.jobId === window.currentInboxJobId).length;
+    if (countNewEl) countNewEl.innerText = poolCandidates.filter(c => c.jobId === window.currentInboxJobId && c.isNew).length;
+    if (countShortlistedEl) countShortlistedEl.innerText = shortlistedCandidates.length;
+    if (countRejectedEl) countRejectedEl.innerText = rejectedCandidates.length;
+
+    ['all', 'new', 'shortlisted', 'rejected'].forEach(folder => {
+        const el = document.getElementById(`folder-${folder}`);
+        if (!el) return;
+        const active = folder === currentInboxFilter;
+        el.classList.toggle('bg-blue-50', active);
+        el.classList.toggle('text-blue-700', active);
+        el.classList.toggle('border-blue-100', active);
+        el.classList.toggle('text-slate-600', !active);
+        el.classList.toggle('dark:text-slate-400', !active);
+    });
 
     if (candidates.length === 0) {
         listContainer.innerHTML = `
@@ -7427,6 +7520,8 @@ window.moveToPipeline = async (candId) => {
             stage: 'Screening',
             updatedAt: serverTimestamp()
         });
+        refreshTalentPoolCache();
+        renderTalentPool();
         showToast(`Candidate ${c.name} moved to Screening pipeline.`);
     } catch (error) {
         console.error("Error moving to pipeline:", error);
@@ -7456,6 +7551,8 @@ window.bulkInboxAction = async (action) => {
         });
 
         await Promise.all(promises);
+        refreshTalentPoolCache();
+        renderTalentPool();
         showToast(`Bulk ${isShortlist ? 'shortlisted' : 'rejected'} ${selected.length} candidates.`);
         toggleBulkBar();
     } catch (err) {
@@ -7524,8 +7621,8 @@ window.addCandidateTag = async (id, tag) => {
 };
 
 window.updateTalentPoolBadge = () => {
-    if (!cachedTalentPool) return;
-    const newCount = cachedTalentPool.filter(c => c.isNew).length;
+    refreshTalentPoolCache();
+    const newCount = cachedTalentPool.filter(c => c.isNew || c.stage === 'Applied').length;
     const badge = document.getElementById('talent-pool-badge');
     if (badge) {
         if (newCount > 0) {
@@ -8074,6 +8171,8 @@ window.updateInitialsDisplay = (name) => {
     const display = document.getElementById('cand-initials-display');
     if (display) display.innerText = getInitials(name);
 };
+
+window.openEditJobModal = (id) => window.editJob(id);
 
 window.setRating = (category, value) => {
     // Target the hidden input by ID: val-rating-technical or val-rating-communication

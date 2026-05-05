@@ -1825,25 +1825,22 @@ option {
 
 /* ===================== IMMERSIVE WORKSPACE ===================== */
 .immersive-workspace {
-    position: fixed;
-    inset: 1rem;
-    z-index: 150;
+    position: relative;
+    z-index: 1;
     background: var(--bg-secondary);
-    border-radius: 2.5rem;
+    border-radius: 1.5rem;
     box-shadow: 0 0 100px rgba(0, 0, 0, 0.3);
     border: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    width: 95vw;
-    height: 95vh;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
+    width: min(96vw, 1500px);
+    height: min(92vh, 980px);
+    max-height: calc(100vh - 2rem);
 }
 
 .workspace-header {
-    height: 5rem;
+    min-height: 5rem;
     border-bottom: 1px solid var(--border-color);
     display: flex;
     align-items: center;
@@ -1863,6 +1860,7 @@ option {
     flex: 1;
     display: flex;
     overflow: hidden;
+    min-height: 0;
 }
 
 .workspace-sidebar {
@@ -1883,6 +1881,7 @@ option {
     padding: 2.5rem;
     overflow-y: auto;
     background: var(--bg-secondary);
+    min-width: 0;
 }
 
 .workspace-actions {
@@ -1892,6 +1891,48 @@ option {
     overflow-y: auto;
     flex-shrink: 0;
     background: rgba(248, 250, 252, 0.3);
+}
+
+@media (max-width: 1100px) {
+    .immersive-workspace {
+        width: calc(100vw - 1rem);
+        height: calc(100vh - 1rem);
+        max-height: calc(100vh - 1rem);
+        border-radius: 1rem;
+    }
+
+    .workspace-header {
+        height: auto;
+        min-height: 4.5rem;
+        padding: 1rem;
+        gap: 1rem;
+        align-items: flex-start;
+    }
+
+    .workspace-body {
+        flex-direction: column;
+        overflow-y: auto;
+    }
+
+    .workspace-sidebar,
+    .workspace-actions {
+        width: 100%;
+        border-right: 0;
+        border-left: 0;
+        border-bottom: 1px solid var(--border-color);
+        padding: 1rem;
+        overflow: visible;
+    }
+
+    .workspace-actions {
+        border-top: 1px solid var(--border-color);
+        border-bottom: 0;
+    }
+
+    .workspace-content {
+        padding: 1rem;
+        overflow: visible;
+    }
 }
 
 .dark .workspace-actions {
